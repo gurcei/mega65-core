@@ -62,7 +62,7 @@ ENTITY slow_devices IS
     expansionram_wdata : out unsigned(7 downto 0) := x"FF";
     expansionram_address : out unsigned(26 downto 0);
     expansionram_data_ready_strobe : in std_logic;
-    expansionram_busy : in std_logic;
+    expansionram_busy : in std_logic := '0';
 
     -- Improve read speed by saving us from having to even enquire of
     -- the HyperRAM controller for the most recently accessed cache line.
@@ -179,19 +179,19 @@ architecture behavioural of slow_devices is
   
 begin
 
-  opl2fm0: entity work.opl2
-    port map (
-      clk => cpuclock,
-      reset => reset_inverted,
-      opl2_we => opl_we,
-      opl2_data => opl_data,
-      opl2_adr => opl_adr,
-      sample_clk => opl_sc,
-      sample_clk_128 => opl_sc_128,
-      kon => opl_kon,
-      channel_a => fm_left,
-      channel_b => fm_right
-      );
+  -- opl2fm0: entity work.opl2
+  --   port map (
+  --     clk => cpuclock,
+  --     reset => reset_inverted,
+  --     opl2_we => opl_we,
+  --     opl2_data => opl_data,
+  --     opl2_adr => opl_adr,
+  --     sample_clk => opl_sc,
+  --     sample_clk_128 => opl_sc_128,
+  --     kon => opl_kon,
+  --     channel_a => fm_left,
+  --     channel_b => fm_right
+  --     );
   
   cartport0: entity work.expansion_port_controller
     generic map ( pixelclock_frequency => 80,

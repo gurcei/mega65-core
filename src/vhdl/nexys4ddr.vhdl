@@ -123,7 +123,7 @@ entity container is
          ----------------------------------------------------------------------
          -- Flash RAM for holding config
          ----------------------------------------------------------------------
-         QspiDB : inout std_logic_vector(3 downto 0);
+         QspiDB : inout unsigned(3 downto 0) := (others => '0');
          QspiCSn : out std_logic;
          
          ----------------------------------------------------------------------
@@ -190,15 +190,18 @@ architecture Behavioral of container is
   signal buffer_vgagreen : unsigned(7 downto 0);
   signal buffer_vgablue : unsigned(7 downto 0);
   
-  signal pixelclock : std_logic;
-  signal cpuclock : std_logic;
-  signal clock240 : std_logic;
-  signal clock120 : std_logic;
   signal ethclock : std_logic;
-  signal clock200 : std_logic;
-  signal clock30 : std_logic;
-  signal clock30in : std_logic := '0';
-  signal clock30count : integer range 0 to 2 := 0;
+  signal cpuclock : std_logic;
+  signal clock41 : std_logic;
+  signal clock27 : std_logic;
+  signal pixelclock : std_logic; -- i.e., clock81p
+  signal clock81n : std_logic;
+  signal clock120 : std_logic;
+  signal clock100 : std_logic;
+  signal clock135p : std_logic;
+  signal clock135n : std_logic;
+  signal clock162 : std_logic;
+  signal clock325 : std_logic;
   
   signal segled_counter : unsigned(31 downto 0) := (others => '0');
 
@@ -314,14 +317,24 @@ begin
 -- End of STARTUPE2_inst instantiation
 
   
-  dotclock1: entity work.dotclock100
-    port map ( clk_in1 => CLK_IN,
-               clock80 => pixelclock, -- 80MHz
-               clock40 => cpuclock, -- 40MHz
-               clock50 => ethclock,
-               clock200 => clock200,
-               clock120 => clock120,
-               clock240 => clock240
+  -- New clocking setup, using more optimised selection of multipliers
+  -- and dividers, as well as the ability of some clock outputs to provide an
+  -- inverted clock for free.
+  -- Also, the 50 and 100MHz ethernet clocks are now independent of the other
+  -- clocks, so that Vivado shouldn't try to meet timing closure in the (already
+  -- protected) domain crossings used for those.
+  clocks1: entity work.clocking
+    port map ( clk_in    => CLK_IN,
+               clock27   => clock27,    --   27.083 MHz
+               clock41   => cpuclock,   --   40.625 MHz
+               clock50   => ethclock,   --   50     MHz
+               clock81p  => pixelclock, --   81.25  MHz
+               clock81n  => clock81n,   --   81.25  MHz
+               clock100  => clock100,   --  100     MHz
+               clock135p => clock135p,  --  135.417 MHz
+               clock135n => clock135n,  --  135.417 MHz
+               clock163  => clock162,   -- 162.5    MHz
+               clock325  => clock325    -- 325      MHz
                );
 
   fpgatemp0: fpgatemp
@@ -386,18 +399,17 @@ begin
       );
   
   machine0: entity work.machine
-    generic map (cpufrequency => 40,
+    generic map (cpu_frequency => 40500000,
                  target => nexys4ddr)
     port map (
       pixelclock      => pixelclock,
       cpuclock        => cpuclock,
       uartclock       => cpuclock, -- Match CPU clock
-      ioclock         => cpuclock, -- Match CPU clock
-      clock240 => clock240,
-      clock120 => clock120,
-      clock40 => cpuclock,
-      clock200 => clock200,
+      clock162 => clock162,
+      clock100 => clock100,
+      clock27 => clock27,
       clock50mhz      => ethclock,
+
       btncpureset => btncpureset,
       reset_out => reset_out,
       irq => irq,
@@ -451,10 +463,9 @@ begin
       no_hyppo => '0',
       
       vsync           => vsync,
-      hsync           => hsync,
+      vga_hsync           => hsync,
       lcd_vsync => lcd_vsync,
       lcd_hsync => lcd_hsync,
-      lcd_display_enable => lcd_display_enable,
       vgared(7 downto 0)          => buffer_vgared,
       vgagreen(7 downto 0)        => buffer_vgagreen,
       vgablue(7 downto 0)         => buffer_vgablue,
@@ -573,29 +584,29 @@ begin
   restore_key <= not btn(1);
 
   -- Push correct clock to LCD panel
-  jbhi(7) <= not clock30 when pal50_select='1' else not cpuclock;
+  -- jbhi(7) <= not clock30 when pal50_select='1' else not cpuclock;
 
 
   -- Create BUFG'd 30MHz clock for LCD panel
   --------------------------------------
-  clkin30_buf : IBUFG
-  port map
-   (O => clock30,
-    I => clock30in);
+  -- clkin30_buf : IBUFG
+  -- port map
+  --  (O => clock30,
+  --   I => clock30in);
   
-  process (clock240)
-  begin
-    if rising_edge(clock240) then
-      if (clock30count /= 2 ) then
-        clock30count <= clock30count + 1;
-      else
-        clock30in <= not clock30in;
-        clock30count <= 0;
-      end if;
-    end if;
-  end process;
+  -- process (clock240)
+  -- begin
+  --   if rising_edge(clock240) then
+  --     if (clock30count /= 2 ) then
+  --       clock30count <= clock30count + 1;
+  --     else
+  --       clock30in <= not clock30in;
+  --       clock30count <= 0;
+  --     end if;
+  --   end if;
+  -- end process;
   
-  process (cpuclock,clock120,clock30,cpuclock,pal50_select)
+  process (cpuclock,clock120,cpuclock,pal50_select)
   begin
     if rising_edge(clock120) then
       if sw(7)='0' then
