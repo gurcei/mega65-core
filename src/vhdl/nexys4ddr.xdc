@@ -3,6 +3,8 @@
 ## - uncomment the lines corresponding to used pins
 ## - rename the used ports (in each line, after get_ports) according to the top level signal names in the project
 
+set_property CLOCK_DEDICATED_ROUTE FALSE [get_nets clocks1/CLKOUT0]
+
 # Ignore false paths crossing clock domains in pixel output stage
 
 ## Clock signal
