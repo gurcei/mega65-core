@@ -5,6 +5,7 @@ use STD.textio.all;
 use work.debugtools.all;
 
 entity touch is
+  generic ( clock_frequency : integer );
   port (
     clock50mhz : in std_logic;
     sda : inout std_logic;
@@ -23,12 +24,12 @@ entity touch is
 
 
     scan_count : inout unsigned(7 downto 0) := x"00";
-    b0 : out unsigned(7 downto 0);
-    b1 : out unsigned(7 downto 0);
-    b2 : out unsigned(7 downto 0);
-    b3 : out unsigned(7 downto 0);
-    b4 : out unsigned(7 downto 0);
-    b5 : out unsigned(7 downto 0);
+    b0 : out unsigned(7 downto 0) := x"00";
+    b1 : out unsigned(7 downto 0) := x"00";
+    b2 : out unsigned(7 downto 0) := x"00";
+    b3 : out unsigned(7 downto 0) := x"00";
+    b4 : out unsigned(7 downto 0) := x"00";
+    b5 : out unsigned(7 downto 0) := x"00";
     touch_byte : out unsigned(7 downto 0) := x"BD";
     touch_byte_num : in unsigned(7 downto 0);
 
@@ -106,6 +107,7 @@ begin
 
 
   i2c0: entity work.i2c_master
+    generic map ( input_clk => clock_frequency )
     port map (
       clk => clock50mhz,
       reset_n => i2c0_reset,
@@ -130,6 +132,7 @@ begin
       else
         last_busy <= '1';
       end if;
+      
 --      report "busy=" & std_logic'image(i2c0_busy) & "last_busy = " & std_logic'image(last_busy);
 
       touch1_active <= touch1_active_internal;
@@ -214,11 +217,11 @@ begin
         busy_count <= 0;
       end if;
       if i2c0_busy='0' and last_busy='1' then
-        report "busy de-asserted: dispatching next command";
+--        report "busy de-asserted: dispatching next command";
          case busy_count is
           when 0 =>
-            if touch_enabled='1' and i2c0_error='0' then
-              report "Beginning touch panel scan";
+            if touch_enabled='1' then
+--              report "Beginning touch panel scan";
               -- send initial command
               i2c0_command_en <= '1';
               i2c0_address <= "0111000";  -- 0x70 = I2C address of touch panel
@@ -230,22 +233,18 @@ begin
               busy_count <= 0;
             end if;
           when 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 =>
-            if i2c0_error='1' then
-              i2c0_command_en <= '0';
-              busy_count <= 0;
-              report "I2C error: Restarting job.";
-            else
-              i2c0_rw <= '1';
-              i2c0_command_en <= '1';
-            end if;
-            if busy_count>1 then
+            busy_count <= busy_count + 1;
+            i2c0_rw <= '1';
+            i2c0_command_en <= '1';
+            if busy_count > 2 and busy_count < 18 then
               report "Setting byte(" & integer'image(busy_count - 2) & ") to $" & to_hstring(i2c0_rdata);
               bytes(busy_count - 2) <= i2c0_rdata;
             end if;
-            busy_count <= busy_count + 1;
           when others =>
-            report "Setting byte(" & integer'image(busy_count - 2) & ") to $" & to_hstring(i2c0_rdata);
-            bytes(busy_count - 2) <= i2c0_rdata;
+            if busy_count > 2 and busy_count < 18 then
+              report "Setting byte(" & integer'image(busy_count - 2) & ") to $" & to_hstring(i2c0_rdata);
+              bytes(busy_count - 2) <= i2c0_rdata;
+            end if;
             i2c0_command_en <= '0';
             busy_count <= 0;
             parse_touch <= 1;

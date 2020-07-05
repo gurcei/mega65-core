@@ -29,10 +29,11 @@ use work.debugtools.all;
 
 entity i2s_clock is
   generic (
+    clock_frequency : integer;
     sample_rate : integer := 8000
     );
   port (
-    clock50mhz : in std_logic;
+    cpuclock : in std_logic;
 
     -- I2S PCM audio interface
     i2s_clk : out std_logic := '0';
@@ -43,40 +44,42 @@ end i2s_clock;
 
 architecture brutalist of i2s_clock is
 
-  -- How many clock ticks per half I2S clock tick
-  constant clockdivider : integer := 25000000/2000000;
-  signal pcmclock_counter : integer range 0 to (clockdivider - 1) := 0;
-
   -- How many I2S clock ticks per half sample rate
-  constant sampleratedivider : integer := 1000000/sample_rate;
-  signal eightkhz_counter : integer range 0 to (sampleratedivider - 1) := 0;
+--  constant sampleratedivider : integer := 25000000/sample_rate;
+  -- SSM2518 requires certain fixed values here, so pick the fastest one
+  -- of 64 clocks per sample = 32 clocks per half-sample
+  -- MCLK must be between ~2 and 6MHz for this mode, so we need to divide the 50MHz
+  -- clock by 10.  The loop divides by 2 implicitly, so we need 5 cycles per
+  -- clock phase.
+  constant clock_divider : integer := (clock_frequency/10000000) / 2;
+  signal clock_counter : integer range 0 to (clock_divider - 1) := 0;
+  constant sampleratedivider : integer := 64;
+  signal sample_counter : integer range 0 to (sampleratedivider - 1) := 0;
 
   signal i2s_clk_int : std_logic := '0';
   signal i2s_sync_int : std_logic := '0';
   
 begin
 
-  process (clock50mhz) is
+  process (cpuclock) is
   begin
-    if rising_edge(clock50mhz) then
-      if pcmclock_counter /= (clockdivider - 1) then
-        pcmclock_counter <= pcmclock_counter + 1;
+    if rising_edge(cpuclock) then
+      if clock_counter /= 0 then
+        clock_counter <= clock_counter - 1;
       else
-        pcmclock_counter <= 0;
-
+        clock_counter <= clock_divider - 1;
         i2s_clk <= not i2s_clk_int;
         i2s_clk_int <= not i2s_clk_int;
         
         -- Check if it is time for a new sample
-        if eightkhz_counter /= (sampleratedivider - 1) then
-          eightkhz_counter <= eightkhz_counter + 1;
+        if sample_counter /= (sampleratedivider - 1) then
+          sample_counter <= sample_counter + 1;
         else
           -- Time for a new sample
-          eightkhz_counter <= 0;
+          sample_counter <= 0;
 
           i2s_sync <= not i2s_sync_int;
           i2s_sync_int <= not i2s_sync_int;
-
         end if;
       end if;
     end if;

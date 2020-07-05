@@ -27,5 +27,11 @@ echo "wrote: src/vhdl/version.vhdl"
 echo 'msg_gitcommit: .byte "GIT: '${stringout}'",0' > src/version.a65
 echo "wrote: version.a65"
 
-cat assets/matrix_banner.txt | sed -e 's/GITCOMMITID/'"${stringout}"'/g' > bin/matrix_banner.txt
+echo -e 'msg_gitcommit:\n\tascii("GIT: '${stringout}'")\n\t.byte 0' > src/version.asm
+echo "wrote: version.asm"
+
+echo 'msg_gitcommit: .byte "GIT: '${stringout}'"' > src/monitor/version.a65
+echo "wrote: monitor/version.a65"
+
+cat assets/matrix_banner.txt | sed -e 's/GITCOMMITID/'"${stringout}"'/g' | src/tools/format_banner bin/matrix_banner.txt 50
 echo "wrote: bin/matrix_banner.txt"

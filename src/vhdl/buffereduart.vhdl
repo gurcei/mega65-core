@@ -30,8 +30,6 @@ use work.debugtools.all;
 entity buffereduart is
   port (
     clock : in std_logic;
-    clock50mhz : in std_logic;
-    clock200 : in std_logic;
     reset : in std_logic;
     irq : out std_logic := 'Z';
     buffereduart_cs : in std_logic;
@@ -176,7 +174,8 @@ begin  -- behavioural
 
   buffer0: entity work.ram8x4096
     port map (
-    clk => clock,
+    clkr => clock,
+    clkw => clock,
     cs => '1',
     w => buffer_write,
     write_address => buffer_writeaddress,
@@ -189,7 +188,7 @@ begin  -- behavioural
       send    => tx0_trigger,
       BIT_TMR_MAX => uart0_bit_rate_divisor_internal,
       clk     => clock,
-      data    => std_logic_vector(tx0_data),
+      data    => tx0_data,
       ready   => tx0_ready,
       uart_tx => uart0_tx_drive);
 
@@ -208,7 +207,7 @@ begin  -- behavioural
       send    => tx2_trigger,
       BIT_TMR_MAX => uart2_bit_rate_divisor_internal,
       clk     => clock,
-      data    => std_logic_vector(tx2_data),
+      data    => tx2_data,
       ready   => tx2_ready,
       uart_tx => uart2_tx_drive);
 
@@ -291,7 +290,7 @@ begin  -- behavioural
           when x"0" => fastio_rdata <= uart0_rx_byte;
           when x"1" =>
             fastio_rdata(7) <= uart0_irq;
-            fastio_rdata(6) <= not uart0_rx_byte_ready;
+            fastio_rdata(6) <= uart0_rx_empty;
             fastio_rdata(5) <= uart0_tx_empty;
             fastio_rdata(4) <= uart0_rx_full;
             fastio_rdata(3) <= uart0_tx_full;
@@ -308,7 +307,7 @@ begin  -- behavioural
           when x"8" => fastio_rdata <= uart2_rx_byte;
           when x"9" =>
             fastio_rdata(7) <= uart2_irq;
-            fastio_rdata(6) <= not uart2_rx_byte_ready;
+            fastio_rdata(6) <= uart2_rx_empty;
             fastio_rdata(5) <= uart2_tx_empty;
             fastio_rdata(4) <= uart2_rx_full;
             fastio_rdata(3) <= uart2_tx_full;

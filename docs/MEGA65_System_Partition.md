@@ -36,7 +36,7 @@ $014-$017 - Size of freeze program area (in sectors)
 $018-$01B - Size of each freeze slot (in sectors)
 $01C-$01D - Number of freeze slots
 $01E-$01F - Number of sectors in freeze slot directory
-$020-$023 - Start of freeze program area (in sectors)
+$020-$023 - Start of service program area (in sectors)
 $024-$027 - Size of service program area (in sectors)
 $028-$02B - Size of each service slot (in sectors)
 $02C-$02D - Number of service slots
@@ -61,6 +61,8 @@ $003.7 - Select DAC mode: 0=PDM, 1=PWM
 $004.0 - 0=F011 will use disk images from SD card, 1=F011 will use 3.5" internal floppy drive
 $005.0 - 0=Disable transparent 1351 emulation for Amiga mouses, 1=Enable use of Amiga mouses as though they were 1351 mouses.
 $006-$00B - Ethernet MAC address
+$010-$01F - Default disk image to mount
+$020 - Select old/new DMAgic ($00=old, $01=new)
 
 ## Boot Logo
 

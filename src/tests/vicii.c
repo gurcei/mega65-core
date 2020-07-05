@@ -1,6 +1,6 @@
 /*
   Test program for VIC-II.
-  (C) Copyright Paul Gardner-Stephen, 2017.
+  (C) Copyright Paul Gardner-Stephen, 2017 - 2018.
   Released under the GNU General Public License, v3.
 
   The purpose of this program is to test as many functions of
@@ -386,12 +386,109 @@ void sprite_sprite_collide_tests(void)
   }
 }
 
+extern void install_irq(void);
+
+void d018_timing_tests(void)
+{
+  /* CC65 puts a stack at $0800-$0FFF, so we can
+     be a bit hacky, and use the first few bytes of $0800 as an alternate screen.
+     What we then want to do, is change $D018 during raster line 50, and confirm
+     that the newly indicated row of text is displayed.  We can verify this through
+     sprite colission, by having one of the rows with blank characters, and the other
+     with non-blank ones.  Then we change it during raster line 51, and confirm that the
+     original row of text is displayed, by using the same methodology.  
+  */
+
+  printf("     $D018 changes have correct timing");
+
+  stash_screen(); clear_screen();
+  // Draw a horizontal bar at top of alternate screen
+  for(v=0;v<80;v++) POKE(0x0800+v,0xA0);
+  // Draw a solid sprite overlapping with it
+  sprite_setxy(0,90,33); sprite_erase(0); sprite_reverse(0); sprites_on(1);
+  POKE(0xbf8U,PEEK(0x7f8U)); // set sprite data area on alternate screen
+
+  // Disable interrupts, and setup our raster interrupt handler
+  __asm__("sei");
+  POKE(0xD01AU,0x81U); // enable raster interrupts
+  POKE(0xDC0DU,0x7fU); // Disable CIA timer interrupts
+  v=PEEK(0xDC0DU); // clear any stale CIA timer interrupt
+  install_irq();
+
+  // Set raster interrupt for raster 57
+  POKE(0xD012U,57); POKE(0xd011U,0x1b);
+  // allow interrupt to happen
+  __asm__("cli");
+
+  // Wait for end of frame
+  wait_for_vsync();
+  // Wait for end of next frame, clear any stale sprite colission
+  v=PEEK(0xD01F);
+  wait_for_vsync();
+  // After next frame, check for colission
+  v=PEEK(0xD01FU);
+  if (v!=0x01) {
+    restore_screen(); sprites_on(0);
+    printf("\nFAIL: Changing $D018 at raster 57 should switch first row to alternate screen, but original screen appeared to be there.\n");
+    printf("\nFAIL: *$D01F != $01: Saw $%x\n",v);
+    fatal();
+  }
+
+  // Set raster interrupt for raster 58, and do the same
+  POKE(0xD012U,58); POKE(0xd011U,0x1b);
+  // Wait for end of frame
+  wait_for_vsync();
+  // Wait for end of next frame, clear any stale sprite colission
+  v=PEEK(0xD01F);
+  wait_for_vsync();
+  // After next frame, check for colission
+  v=PEEK(0xD01FU);
+  if (v!=0x01) {
+    restore_screen(); sprites_on(0);
+    printf("\nFAIL: Changing $D018 at raster 58 should switch first row to alternate screen, but original screen appeared to be there.\n");
+    printf("\nFAIL: *$D01F != $01: Saw $%x\n",v);
+    fatal();
+  }
+
+  // Set raster interrupt for raster 51, and this should now be too late
+  POKE(0xD012U,59); POKE(0xd011U,0x1b);
+  // Wait for end of frame
+  wait_for_vsync();
+  // Wait for end of next frame, clear any stale sprite colission
+  v=PEEK(0xD01F);
+  wait_for_vsync();
+  // After next frame, check for colission
+  v=PEEK(0xD01FU);
+  if (v!=0x00) {
+    restore_screen(); sprites_on(0);    
+    printf("\nFAIL: Changing $D018 at raster 59 should NOT switch first row to alternate screen, but alternate screen appeared to be there.\n");
+    printf("\nFAIL: *$D01F != $00: Saw $%x\n",v);
+    fatal();
+  }
+
+  // All done, restore IRQ etc
+  __asm__("sei");
+  __asm__("lda #$80");
+  __asm__("sta $d01a");
+  __asm__("inc $d019");
+  __asm__("lda #$81");
+  __asm__("sta $dc0d");
+  __asm__("lda #$31");
+  __asm__("sta $0314");
+  __asm__("lda #$ea");
+  __asm__("sta $0315");
+  __asm__("cli");
+
+  restore_screen(); sprites_on(0);
+  ok();
+}
+
 int main(int argc,char **argv)
 {
   
   printf("%c%c"
 	 "M.E.G.A.65 VIC-II Test Programme\n"
-	 "(C)Copyright Paul Gardner-Stephen, 2017.\n"
+	 "(C) Paul Gardner-Stephen, 2017-2018\n"
 	 "GNU General Public License v3 or newer.\n"
 	 "\n",0x93,5);
 
@@ -415,4 +512,17 @@ int main(int argc,char **argv)
   sprite_y_tests();
   sprite_x_tests();
 
+  /*
+    Okay. Now we know that sprites appear in the correct places, and can collide with
+    character data properly. So we can do some more sophisticated tests.
+    The next one makes sure that changes to $D018 have the correct timing.
+    On a real C64, if you change the screen RAM address during raster 50, the first
+    row of text will be displayed with the change, but if it is done in raster 51, then
+    it is too late, and the first row of text will come from wherever $D018 previously
+    indicated.
+  */
+  d018_timing_tests();
+
+  printf("Testing complete.\n");
+  while(1) continue;
 }

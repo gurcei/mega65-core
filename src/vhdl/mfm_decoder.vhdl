@@ -24,7 +24,7 @@ use work.debugtools.all;
   
 entity mfm_decoder is
   port (
-    clock50mhz : in std_logic;
+    clock40mhz : in std_logic;
 
     f_rdata : in std_logic;
     invalidate : in std_logic;
@@ -54,6 +54,9 @@ entity mfm_decoder is
     found_sector : out unsigned(7 downto 0) := x"00";
     found_side : out unsigned(7 downto 0) := x"00";
 
+    autotune_step : out std_logic := '0';
+    autotune_stepdir : out std_logic := '0';
+    
     -- Bytes of the sector when reading
     first_byte : out std_logic := '0';
     byte_valid : out std_logic := '0';
@@ -121,7 +124,7 @@ architecture behavioural of mfm_decoder is
 begin
 
   gaps0: entity work.mfm_gaps port map (
-    clock50mhz => clock50mhz,
+    clock40mhz => clock40mhz,
 
     packed_rdata => packed_rdata,
     
@@ -132,7 +135,7 @@ begin
     );
 
   quantise0: entity work.mfm_quantise_gaps port map (
-    clock50mhz => clock50mhz,
+    clock40mhz => clock40mhz,
 
     cycles_per_interval => cycles_per_interval,
 
@@ -144,7 +147,7 @@ begin
     );
 
   bits0: entity work.mfm_gaps_to_bits port map (
-    clock50mhz => clock50mhz,
+    clock40mhz => clock40mhz,
 
     gap_valid => gap_size_valid,
     gap_size => gap_size,
@@ -155,7 +158,7 @@ begin
     );
 
   bytes0: entity work.mfm_bits_to_bytes port map (
-    clock50mhz => clock50mhz,
+    clock40mhz => clock40mhz,
 
     sync_in => sync_in,
     bit_in => bit_in,
@@ -167,7 +170,7 @@ begin
     );
 
   crc0: entity work.crc1581 port map (
-    clock50mhz => clock50mhz,
+    clock40mhz => clock40mhz,
     crc_byte => crc_byte,
     crc_feed => crc_feed,
     crc_reset => crc_reset,
@@ -176,10 +179,14 @@ begin
     crc_value => crc_value
     );
   
-  process (clock50mhz,f_rdata) is
+  process (clock40mhz,f_rdata) is
   begin
-    if rising_edge(clock50mhz) then
+    if rising_edge(clock40mhz) then
 
+      -- We clear this every cycle, so it will only pulse for a very short time
+      -- (25ns).  Is this too short for a floppy drive to notice?
+      autotune_step <= '0';
+      
       mfm_last_byte <= byte_in;
       mfm_state <= to_unsigned(MFMState'pos(state),8);
       mfm_last_gap(11 downto 0) <= gap_length(11 downto 0);
@@ -236,8 +243,11 @@ begin
             if (target_any='1')
               or (
                 (to_integer(target_track) = to_integer(seen_track))
-                and (to_integer(target_sector) = to_integer(seen_sector))
-                and (to_integer(target_side) = to_integer(seen_side))) then
+                and (to_integer(target_sector) = to_integer(seen_sector))) then
+                  -- It seems that some drives/tools format 1581 disks with
+                  -- sectors on both sides marked as side 0. So we should ignore
+                  -- this field.
+--                and (to_integer(target_side) = to_integer(seen_side))) then
               if (last_crc = x"0000") then
 --                report "Seen sector matches target";
                 found_track <= seen_track;
@@ -258,6 +268,14 @@ begin
             found_side <= seen_side;
             if to_integer(target_track) = to_integer(seen_track) then
               found_track(7) <= '1';
+              autotune_step <= '0';
+            else
+              autotune_step <= '1';
+              if to_integer(target_track) > to_integer(seen_track) then
+                autotune_stepdir <= '0';
+              else
+                autotune_stepdir <= '1';
+              end if;
             end if;
             if to_integer(target_sector) = to_integer(seen_sector) then
               found_sector(7) <= '1';

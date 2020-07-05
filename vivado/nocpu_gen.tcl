@@ -131,6 +131,7 @@ set files [list \
  "[file normalize "$origin_dir/src/vhdl/pcm_transceiver.vhdl"]"\
  "[file normalize "$origin_dir/src/vhdl/touch.vhdl"]"\
  "[file normalize "$origin_dir/src/vhdl/i2c_master.vhdl"]"\
+ "[file normalize "$origin_dir/src/vhdl/i2c_wrapper.vhdl"]"\
  "[file normalize "$origin_dir/src/vhdl/mfm_bits_to_bytes.vhdl"]"\
  "[file normalize "$origin_dir/src/vhdl/mfm_decoder.vhdl"]"\
  "[file normalize "$origin_dir/src/vhdl/mfm_gaps_to_bits.vhdl"]"\
@@ -145,16 +146,18 @@ set files [list \
  "[file normalize "$origin_dir/src/vhdl/ghdl_chipram8bit.vhdl"]"\
  "[file normalize "$origin_dir/src/vhdl/ghdl_alpha_blend.vhdl"]"\
  "[file normalize "$origin_dir/src/vhdl/framepacker.vhdl"]"\
+ "[file normalize "$origin_dir/src/vhdl/asym_ram.vhdl"]"\
  "[file normalize "$origin_dir/src/vhdl/ethernet.vhdl"]"\
  "[file normalize "$origin_dir/src/vhdl/ethernet_miim.vhdl"]"\
  "[file normalize "$origin_dir/src/vhdl/cia6526.vhdl"]"\
  "[file normalize "$origin_dir/src/vhdl/c65uart.vhdl"]"\
  "[file normalize "$origin_dir/src/vhdl/mouse_input.vhdl"]"\
  "[file normalize "$origin_dir/src/vhdl/version.vhdl"]"\
- "[file normalize "$origin_dir/src/vhdl/kickstart.vhdl"]"\
+ "[file normalize "$origin_dir/src/vhdl/hyppo.vhdl"]"\
  "[file normalize "$origin_dir/src/vhdl/charrom.vhdl"]"\
  "[file normalize "$origin_dir/src/vhdl/frame_generator.vhdl"]"\
  "[file normalize "$origin_dir/src/vhdl/pixel_driver.vhdl"]"\
+ "[file normalize "$origin_dir/src/vhdl/pixel_fifo.vhdl"]"\
  "[file normalize "$origin_dir/src/vhdl/viciv.vhdl"]"\
  "[file normalize "$origin_dir/src/vhdl/uart_monitor.vhdl"]"\
  "[file normalize "$origin_dir/src/vhdl/iomapper.vhdl"]"\
@@ -181,6 +184,10 @@ set files [list \
  "[file normalize "$origin_dir/src/vhdl/widget_to_matrix.vhdl"]"\
  "[file normalize "$origin_dir/src/vhdl/ps2_to_matrix.vhdl"]"\
  "[file normalize "$origin_dir/src/vhdl/termmem.vhdl"]"\
+ "[file normalize "$origin_dir/src/vhdl/internal1541.vhdl"]"\
+ "[file normalize "$origin_dir/src/vhdl/m6522.vhdl"]"\
+ "[file normalize "$origin_dir/src/vhdl/driverom.vhdl"]"\
+ "[file normalize "$origin_dir/src/vhdl/dpram8x4096.vhdl"]"\
  "[file normalize "$origin_dir/src/vhdl/lfsr16.vhdl"]"\
  "[file normalize "$origin_dir/src/vhdl/ram32x1024.vhdl"]"\
 ]
@@ -318,6 +325,10 @@ set file "vhdl/ghdl_ram8x512.vhdl"
 set file_obj [get_files -of_objects [get_filesets sources_1] [list "*$file"]]
 set_property -name "file_type" -value "VHDL" -objects $file_obj
 
+set file "vhdl/asym_ram.vhdl"
+set file_obj [get_files -of_objects [get_filesets sources_1] [list "*$file"]]
+set_property -name "file_type" -value "VHDL" -objects $file_obj
+
 set file "vhdl/ethernet_miim.vhdl"
 set file_obj [get_files -of_objects [get_filesets sources_1] [list "*$file"]]
 set_property -name "file_type" -value "VHDL" -objects $file_obj
@@ -370,7 +381,7 @@ set file "vhdl/lfsr16.vhdl"
 set file_obj [get_files -of_objects [get_filesets sources_1] [list "*$file"]]
 set_property -name "file_type" -value "VHDL" -objects $file_obj
 
-set file "vhdl/kickstart.vhdl"
+set file "vhdl/hyppo.vhdl"
 set file_obj [get_files -of_objects [get_filesets sources_1] [list "*$file"]]
 set_property -name "file_type" -value "VHDL" -objects $file_obj
 
@@ -435,6 +446,10 @@ set file_obj [get_files -of_objects [get_filesets sources_1] [list "*$file"]]
 set_property -name "file_type" -value "VHDL" -objects $file_obj
 
 set file "vhdl/pixel_driver.vhdl"
+set file_obj [get_files -of_objects [get_filesets sources_1] [list "*$file"]]
+set_property -name "file_type" -value "VHDL" -objects $file_obj
+
+set file "vhdl/pixel_fifo.vhdl"
 set file_obj [get_files -of_objects [get_filesets sources_1] [list "*$file"]]
 set_property -name "file_type" -value "VHDL" -objects $file_obj
 
@@ -622,7 +637,7 @@ if { [ string equal [get_report_configs -of_objects [get_runs impl_1] impl_1_ini
 }
 set obj [get_report_configs -of_objects [get_runs impl_1] impl_1_init_report_timing_summary_0]
 if { $obj != "" } {
-set_property -name "is_enabled" -value "0" -objects $obj
+set_property -name "is_enabled" -value "1" -objects $obj
 
 }
 # Create 'impl_1_opt_report_drc_0' report (if not found)

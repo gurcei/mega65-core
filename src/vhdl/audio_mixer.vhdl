@@ -3,7 +3,7 @@
 -- gain, and which are combined to produce the composited audio for a
 -- given audio output channel.  Each output also has a master volume that
 -- is applied at the end.  We allow 15 inputs + master volume and 16 outputs.
--- This requires 256 x 16 bits = 512 bytes of volume registers.
+-- This requires (16 inputs x 2 bytes) x (8 outputs) x 16 bits = 512 bytes of volume registers.
 -- The reason for having a full cross-bar mixer is so that it is possible to
 -- do all sorts of unusual audio routings, such as patching a call between
 -- the two cellular modems, and then also allowing the mixing in of the local
@@ -25,27 +25,37 @@ use work.cputypes.all;
 
 entity audio_mixer is
   port (    
-    clock50mhz : in std_logic;
+    cpuclock : in std_logic;
 
     -- Interface for accessing mix table
     reg_num : in unsigned(7 downto 0) := x"FF";
     reg_write : in std_logic := '0';
     wdata : in unsigned(15 downto 0) := x"FFFF";
     rdata : out unsigned(15 downto 0) := x"FFFF";
-    audio_loopback : out unsigned(15 downto 0) := x"FFFF";
+    audio_loopback : out signed(15 downto 0) := x"FFFF";
     modem_is_pcm_master : out std_logic := '0';
     amplifier_enable : out std_logic := '0';
+
+    -- Read in values from audio knobs
+    volume_knob1 : in unsigned(15 downto 0) := x"FFFF";
+    volume_knob2 : in unsigned(15 downto 0) := x"FFFF";
+    volume_knob3 : in unsigned(15 downto 0) := x"FFFF";
+
+    -- Which output do the knobs apply to?
+    volume_knob1_target : in unsigned(3 downto 0) := "1111";
+    volume_knob2_target : in unsigned(3 downto 0) := "1111";
+    volume_knob3_target : in unsigned(3 downto 0) := "1111";
     
     -- Audio inputs
-    sources : in sample_vector_t := (others => x"8000");
+    sources : in sample_vector_t := (others => x"0000");
     -- Audio outputs
-    outputs : inout sample_vector_t := (others => x"8000")
+    outputs : inout sample_vector_t := (others => x"0000")
     );
 
 end entity;
 
 architecture elizabethan of audio_mixer is
-  signal srcs : sample_vector_t := (others => x"8000");
+  signal srcs : sample_vector_t := (others => x"0000");
   signal source_num : integer range 0 to 15 := 0;
 
   signal state : integer := 0;
@@ -58,18 +68,24 @@ architecture elizabethan of audio_mixer is
   signal ram_rdata : unsigned(31 downto 0) := to_unsigned(0,32);
   signal ram_we : std_logic := '0';
 
+  signal source14_volume : unsigned(15 downto 0) := to_unsigned(0,16);
+  
   signal set_output : std_logic := '0';
   signal output_channel : integer range 0 to 15 := 0;
   
-  signal mixed_value : integer := 0;
+  signal mixed_value : signed(15 downto 0) := x"0000";
 
   signal dummy : unsigned(15 downto 0) := x"0000";
+
+  signal volume_knob1_last : unsigned(15 downto 0) := x"8000";
+  signal volume_knob2_last : unsigned(15 downto 0) := x"8000";
+  signal volume_knob3_last : unsigned(15 downto 0) := x"8000";
   
 begin
 
   coefmem0: entity work.ram32x1024_sync
     port map (
-      clk => clock50mhz,
+      clk => cpuclock,
 
       cs => '1',
       address => ram_raddr,
@@ -81,9 +97,38 @@ begin
       wdata(15 downto 0) => dummy
       );
   
-  process (clock50mhz) is
+  process (cpuclock) is
+    variable src_temp : unsigned(15 downto 0);
+    variable mix_temp : integer;
+
+    function multiply_by_volume_coefficient( value : signed(15 downto 0);
+                                             volume : unsigned(15 downto 0))
+      return signed is
+      variable value_unsigned : unsigned(15 downto 0);
+      variable result_unsigned : unsigned(31 downto 0);
+      variable result : signed(31 downto 0);
+    begin
+      if (value(15)='0') then
+        value_unsigned(14 downto 0) := unsigned(value(14 downto 0));
+      else
+        value_unsigned(14 downto 0) := (not unsigned(value(14 downto 0)) + 1);
+      end if;
+      value_unsigned(15) := '0';
+
+      result_unsigned := value_unsigned * volume;
+
+      if value(15)='1' then
+        result_unsigned := (not result_unsigned) + 1;
+      end if;
+
+      result := signed(result_unsigned);
+
+      return result(31 downto 16);
+      
+    end function;   
+    
   begin
-    if rising_edge(clock50mhz) then
+    if rising_edge(cpuclock) then
 
       -- Allow CPU to read any audio input or mixed output
       if to_integer(reg_num) < 16 then
@@ -107,6 +152,21 @@ begin
           amplifier_enable <= wdata(0);
         end if;
         ram_we <= '1';
+      elsif volume_knob1_target(3)='0' and volume_knob1 /= volume_knob1_last then
+        ram_waddr <= to_integer(volume_knob1_target)*16+15;
+        ram_wdata(31 downto 17) <= volume_knob1(14 downto 0);
+        ram_wdata(16) <= volume_knob1(0);
+        volume_knob1_last <= volume_knob1;
+      elsif volume_knob2_target(3)='0' and volume_knob2 /= volume_knob2_last then
+        ram_waddr <= to_integer(volume_knob2_target)*16+15;
+        ram_wdata(31 downto 17) <= volume_knob2(14 downto 0);
+        ram_wdata(16) <= volume_knob2(0);
+        volume_knob2_last <= volume_knob2;
+      elsif volume_knob3_target(3)='0' and volume_knob3 /= volume_knob3_last then
+        ram_waddr <= to_integer(volume_knob3_target)*16+15;
+        ram_wdata(31 downto 17) <= volume_knob3(14 downto 0);
+        ram_wdata(16) <= volume_knob3(0);
+        volume_knob3_last <= volume_knob3;
       else
         ram_we <= '0';
       end if;
@@ -120,7 +180,10 @@ begin
           -- Latch input samples
           srcs <= sources;
           -- Reset output value
-          mixed_value <= 0;
+          -- XXX A bit of a hack to allow 16 inputs: Inputs #14 and #15 have
+          -- the same volume level, taken from source 14
+          -- (This is used for the OPL2 FM synthesiser)
+          mixed_value <= multiply_by_volume_coefficient(sources(15),source14_volume);
           report "Zeroing mixed_value";
           -- Request second mix coefficient (first was already scheduled last cycle)
           -- (this is to handle the wait state on read).
@@ -136,8 +199,12 @@ begin
             & ": adding input " & integer'image(state-1)
             & " (= $" & to_hstring(srcs(state - 1)) & ")"
             & " via coefficient $" & to_hstring(ram_rdata(31 downto 16))
-            & " to current sum = $" & to_hstring(to_unsigned(mixed_value,32));
-          mixed_value <= mixed_value + to_integer(ram_rdata(31 downto 16)) * to_integer(srcs(state - 1));
+            & " to current sum = $" & to_hstring(mixed_value);
+--          mix_temp := ram_rdata(31 downto 16) * srcs(state - 1);
+          if state = 15 then
+            source14_volume <= ram_rdata(31 downto 16);
+          end if;
+          mixed_value <= mixed_value + multiply_by_volume_coefficient(srcs(state - 1),ram_rdata(31 downto 16));
           -- Request next mix coefficient
           if state /= 15 then
             ram_raddr <= state + output_offset + 1;
@@ -152,7 +219,7 @@ begin
           report "For output "
             & integer'image(output_num)
             & " applying master volume coefficient $" & to_hstring(ram_rdata(31 downto 16));
-          mixed_value <= to_integer(to_unsigned(mixed_value,32)(31 downto 16)) * to_integer(ram_rdata(31 downto 16));
+          mixed_value <= multiply_by_volume_coefficient(mixed_value,ram_rdata(31 downto 16));
           set_output <= '1';
           output_channel <= output_num;
           
@@ -182,9 +249,9 @@ begin
       end if;
       -- Push mixed output value
       if set_output='1' then
-        outputs(output_channel) <= to_unsigned(mixed_value,32)(31 downto 16);
+        outputs(output_channel) <= mixed_value;
         report "Outputing channel " & integer'image(output_channel) & " mixed value as $"
-          & to_hstring(to_unsigned(mixed_value,32)(31 downto 16));
+          & to_hstring(mixed_value);
       end if;
     end if;
   end process;

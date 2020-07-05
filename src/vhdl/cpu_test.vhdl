@@ -4,6 +4,7 @@ use ieee.numeric_std.all;
 use STD.textio.all;
 use work.all;
 use work.debugtools.all;
+use work.cputypes.all;
 
 entity cpu_test is
   
@@ -13,43 +14,42 @@ architecture behavior of cpu_test is
 
   type CharFile is file of character;
   
-  signal pmoda : std_logic_vector(7 downto 0) := "ZZZZZZZZ";
-  signal pmodc : std_logic_vector(7 downto 0) := "ZZZZZZZZ";
+  signal pmoda : std_logic_vector(7 downto 0) := "11111111";
+  signal pmodc : std_logic_vector(7 downto 0) := "11111111";
   
-  signal pixelclock : std_logic := '0';
-  signal cpuclock : std_logic := '0';
-  signal ioclock : std_logic := '0';
-  signal clock50mhz : std_logic := '0';
-  signal clock200 : std_logic := '0';
-  signal clock40 : std_logic := '0';
-  signal clock33 : std_logic := '0';
-  signal clock30 : std_logic := '0';
+  signal pixelclock : std_logic := '1';
+  signal cpuclock : std_logic := '1';
+  signal clock50mhz : std_logic := '1';
+  signal clock27 : std_logic := '1';
+  signal clock100 : std_logic := '1';
+  signal clock163 : std_logic := '1';
+  signal clock325 : std_logic := '1';
   signal reset : std_logic := '0';
   signal irq : std_logic := '1';
   signal nmi : std_logic := '1';
   signal cpu_exrom : std_logic := '1';
   signal cpu_game : std_logic := '1';
 
-  signal vsync : std_logic;
-  signal hsync : std_logic;
-  signal vgared : unsigned(7 downto 0);
-  signal vgagreen : unsigned(7 downto 0);
-  signal vgablue : unsigned(7 downto 0);
+  signal vsync : std_logic := '0';
+  signal hsync : std_logic := '0';
+  signal vgared : unsigned(7 downto 0) := x"00";
+  signal vgagreen : unsigned(7 downto 0) := x"00";
+  signal vgablue : unsigned(7 downto 0) := x"00";
 
-  signal led : std_logic_vector(15 downto 0);
+  signal led : std_logic_vector(15 downto 0) := x"0000";
   signal sw : std_logic_vector(15 downto 0) := (others => '0');
   signal btn : std_logic_vector(4 downto 0) := (others => '0');
 
-  signal qspidb : std_logic_vector(3 downto 0) := (others => '0');
-  signal qspicsn : std_logic;
-  signal qspisck : std_logic;
-  signal aclsck : std_logic;
+  signal qspidb : unsigned(3 downto 0) := (others => '0');
+  signal qspicsn : std_logic := '0';
+  signal qspisck : std_logic := '0';
+  signal aclsck : std_logic := '0';
 
-  signal UART_TXD : std_logic;
-  signal RsRx : std_logic;
+  signal UART_TXD : std_logic := '0';
+  signal RsRx : std_logic := '0';
   
-  signal sseg_ca : std_logic_vector(7 downto 0);
-  signal sseg_an : std_logic_vector(7 downto 0);
+  signal sseg_ca : std_logic_vector(7 downto 0) := x"00";
+  signal sseg_an : std_logic_vector(7 downto 0) := x"00";
 
   component slowram is
     port (address : in std_logic_vector(26 downto 0);
@@ -83,20 +83,20 @@ architecture behavior of cpu_test is
 
   signal eth_rxdv : std_logic := '0';
   signal eth_rxd : unsigned(1 downto 0) := "00";
-  signal eth_txen : std_logic;
-  signal eth_txd : unsigned(1 downto 0);
+  signal eth_txen : std_logic := '0';
+  signal eth_txd : unsigned(1 downto 0) := "00";
 
-  signal cart_ctrl_dir : std_logic;
-  signal cart_haddr_dir : std_logic;
-  signal cart_laddr_dir : std_logic;
-  signal cart_data_dir : std_logic;
-  signal cart_phi2 : std_logic;
-  signal cart_dotclock : std_logic;
-  signal cart_reset : std_logic;
+  signal cart_ctrl_dir : std_logic := '0';
+  signal cart_haddr_dir : std_logic := '0';
+  signal cart_laddr_dir : std_logic := '0';
+  signal cart_data_dir : std_logic := '0';
+  signal cart_phi2 : std_logic := '0';
+  signal cart_dotclock : std_logic := '0';
+  signal cart_reset : std_logic := '0';
 
-  signal cart_nmi : std_logic;
-  signal cart_irq : std_logic;
-  signal cart_dma : std_logic;
+  signal cart_nmi : std_logic := '0';
+  signal cart_irq : std_logic := '0';
+  signal cart_dma : std_logic := '0';
 
   signal cart_exrom : std_logic := 'Z';
   signal cart_ba : std_logic := 'Z';
@@ -114,12 +114,12 @@ architecture behavior of cpu_test is
   ----------------------------------------------------------------------
   -- CBM floppy serial port
   ----------------------------------------------------------------------
-  signal iec_clk_en : std_logic;
-  signal iec_data_en : std_logic;
-  signal iec_data_o : std_logic;
-  signal iec_reset : std_logic;
-  signal iec_clk_o : std_logic;
-  signal iec_atn_o : std_logic;
+  signal iec_clk_en : std_logic := '0';
+  signal iec_data_en : std_logic := '0';
+  signal iec_data_o : std_logic := '0';
+  signal iec_reset : std_logic := '0';
+  signal iec_clk_o : std_logic := '0';
+  signal iec_atn_o : std_logic := '0';
 
   signal iec_data_external : std_logic := '0';
   signal iec_clk_external : std_logic := '1';
@@ -127,23 +127,106 @@ architecture behavior of cpu_test is
   ----------------------------------------------------------------------
   -- Slow devices (cartridge port, slow RAM etc)
   ----------------------------------------------------------------------
-  signal slow_access_request_toggle : std_logic;
-  signal slow_access_ready_toggle : std_logic;
-  signal slow_access_write : std_logic;
-  signal slow_access_address : unsigned(27 downto 0);
-  signal slow_access_wdata : unsigned(7 downto 0);
-  signal slow_access_rdata : unsigned(7 downto 0);
+  signal slow_access_request_toggle : std_logic := '0';
+  signal slow_access_ready_toggle : std_logic := '0';
+  signal slow_access_write : std_logic := '0';
+  signal slow_access_address : unsigned(27 downto 0) := (others => '0');
+  signal slow_access_wdata : unsigned(7 downto 0) := (others => '0');
+  signal slow_access_rdata : unsigned(7 downto 0) := (others => '0');
 
-  signal sector_buffer_mapped : std_logic;
+  signal sector_buffer_mapped : std_logic := '0';
 
   signal pot_drain : std_logic := '0';
 
   signal f_rdata : std_logic := '1';
 
   signal pcm_modem1_data_out : std_logic := '0';
+
+  signal lcd_dataenable : std_logic := '1';
+
+  signal hyper_addr : unsigned(18 downto 3) := (others => '0');
+  signal hyper_request_toggle : std_logic := '0';
+  signal hyper_data : unsigned(7 downto 0) := x"00";
+  signal hyper_data_strobe : std_logic := '0';
+
+  signal expansionram_read : std_logic := '0';
+  signal expansionram_write : std_logic := '0';
+  signal expansionram_rdata : unsigned(7 downto 0) := (others => '0');
+  signal expansionram_wdata : unsigned(7 downto 0) := (others => '0');
+  signal expansionram_address : unsigned(26 downto 0) := (others => '0');
+  signal expansionram_data_ready_strobe : std_logic := '0';
+  signal expansionram_busy : std_logic := '0';
+
+  signal current_cache_line : cache_row_t := (others => (others => '0'));
+  signal current_cache_line_address : unsigned(26 downto 3) := (others => '0');
+  signal current_cache_line_valid : std_logic := '0';
+  signal expansionram_current_cache_line_next_toggle : std_logic := '0';
+
+  signal hr_d : unsigned(7 downto 0);
+  signal hr_rwds : std_logic := '0';
+  signal hr_reset : std_logic := '0';
+  signal hr_clk_n : std_logic := '0';
+  signal hr_clk_p : std_logic := '0';
+  signal hr_cs0 : std_logic := '0';
+
+  signal hr2_d : unsigned(7 downto 0) := (others => '0');
+  signal hr2_rwds : std_logic := '0';
+  signal hr2_reset : std_logic := '0';
+  signal hr2_clk_n : std_logic := '0';
+  signal hr2_clk_p : std_logic := '0';
+  signal hr2_cs0 : std_logic := '0'; 
+
+  signal audio_left : std_logic_vector(19 downto 0) := (others => '0');
+  signal audio_right : std_logic_vector(19 downto 0) := (others => '0');
   
 begin
 
+  fh0: if false generate
+  fakehyper0: entity work.s27kl0641
+    generic map (
+      id => "$8000000",
+      tdevice_vcs => 5 ns,
+      timingmodel => "S27KL0641DABHI000"
+      )
+    port map (
+      DQ7 => hr_d(7),
+      DQ6 => hr_d(6),
+      DQ5 => hr_d(5),
+      DQ4 => hr_d(4),
+      DQ3 => hr_d(3),
+      DQ2 => hr_d(2),
+      DQ1 => hr_d(1),
+      DQ0 => hr_d(0),
+
+      CSNeg => hr_cs0,
+      CK => hr_clk_p,
+      RESETneg => hr_reset,
+      RWDS => hr_rwds
+      );
+    
+
+  fakehyper1: entity work.s27kl0641
+    generic map (
+      id => "$8800000",
+      tdevice_vcs => 5 ns,
+      timingmodel => "S27KL0641DABHI000"
+      )
+    port map (
+      DQ7 => hr2_d(7),
+      DQ6 => hr2_d(6),
+      DQ5 => hr2_d(5),
+      DQ4 => hr2_d(4),
+      DQ3 => hr2_d(3),
+      DQ2 => hr2_d(2),
+      DQ1 => hr2_d(1),
+      DQ0 => hr2_d(0),
+
+      CSNeg => hr2_cs0,
+      CK => hr2_clk_p,
+      RESETneg => hr2_reset,
+      RWDS => hr2_rwds
+      );    
+  
   fake_expansion_port0: entity work.fake_expansion_port
     port map (
       cpuclock => cpuclock,
@@ -176,7 +259,61 @@ begin
       cart_a => cart_a
       );
 
+  hyperram0: entity work.hyperram
+    port map (
+      pixelclock => pixelclock,
+      clock163 => clock163,
+      clock325 => clock325,
+
+      -- XXX Debug by showing if expansion RAM unit is receiving requests or not
+--      request_counter => led,
+
+      viciv_addr => hyper_addr,
+      viciv_request_toggle => hyper_request_toggle,
+      viciv_data_out => hyper_data,
+      viciv_data_strobe => hyper_data_strobe,
+      
+      -- reset => reset_out,
+      address => expansionram_address,
+      wdata => expansionram_wdata,
+      read_request => expansionram_read,
+      write_request => expansionram_write,
+      rdata => expansionram_rdata,
+      data_ready_strobe => expansionram_data_ready_strobe,
+      busy => expansionram_busy,
+
+      current_cache_line => current_cache_line,
+      current_cache_line_address => current_cache_line_address,
+      current_cache_line_valid => current_cache_line_valid,     
+      expansionram_current_cache_line_next_toggle  => expansionram_current_cache_line_next_toggle,
+      
+      hr_d => hr_d,
+      hr_rwds => hr_rwds,
+      hr_reset => hr_reset,
+      hr_clk_p => hr_clk_p,
+--      hr_clk_n => hr_clk_n,
+
+      hr_cs0 => hr_cs0,
+      hr_cs1 => hr2_cs0,
+
+      hr2_d => hr2_d,
+      hr2_rwds => hr2_rwds,
+      hr2_reset => hr2_reset,
+      hr2_clk_p => hr2_clk_p
+--      hr_clk_n => hr_clk_n,
+      );
+  end generate;
   
+  hdmiaudio: entity work.hdmi_spdif
+    generic map ( samplerate => 44100 )
+    port map (
+      clock27 => clock27,
+      spdif_out => open,
+      left_in => audio_left,
+      right_in => audio_right
+      );  
+
+  sd0: if false generate
   slow_devices0: entity work.slow_devices
     port map (
       cpuclock => cpuclock,
@@ -197,7 +334,20 @@ begin
       slow_access_address => slow_access_address,
       slow_access_wdata => slow_access_wdata,
       slow_access_rdata => slow_access_rdata,
+
+      expansionram_current_cache_line => current_cache_line,
+      expansionram_current_cache_line_address => current_cache_line_address,
+      expansionram_current_cache_line_valid => current_cache_line_valid,
+      expansionram_current_cache_line_next_toggle  => expansionram_current_cache_line_next_toggle,
       
+      expansionram_data_ready_strobe => expansionram_data_ready_strobe,
+      expansionram_busy => expansionram_busy,
+      expansionram_read => expansionram_read,
+      expansionram_write => expansionram_write,
+      expansionram_address => expansionram_address,
+      expansionram_rdata => expansionram_rdata,
+      expansionram_wdata => expansionram_wdata,      
+          
       ----------------------------------------------------------------------
       -- Expansion/cartridge port
       ----------------------------------------------------------------------
@@ -226,33 +376,45 @@ begin
       cart_d => cart_d,
       cart_a => cart_a
       );
-  
+  end generate;
+
   core0: entity work.machine
+    generic map ( target => simulation,
+    		  cpu_frequency => 40_500_000,
+                  hyper_installed => true)
     port map (
       fpga_temperature => (others => '1'),
 
+      portb_pins => (others => '1'),
+
+      lcd_dataenable => lcd_dataenable,
+      
       pixelclock      => pixelclock,
       cpuclock      => cpuclock,
       clock50mhz   => clock50mhz,
-      ioclock      => cpuclock,
-      clock40 => clock40,
-      clock33 => clock33,
-      clock30 => clock30,
-      clock200 => clock200,
-      uartclock    => ioclock,
+      clock100 => clock100,
+      clock27 => clock27,
+      clock162 => clock163,
+      
+      uartclock    => cpuclock,
       btnCpuReset      => reset,
       irq => irq,
       nmi => '1',
       cpu_exrom => cpu_exrom,
       cpu_game => cpu_game,
 
+      hyper_addr => hyper_addr,
+      hyper_request_toggle => hyper_request_toggle,
+      hyper_data => hyper_data,
+      hyper_data_strobe => hyper_data_strobe,     
+      
       sector_buffer_mapped => sector_buffer_mapped,
       
       restore_key => '1',
 
       caps_lock_key => '1',
       
-      no_kickstart => '0',
+      no_hyppo => '0',
 
 --      buffereduart_rx => '1',
       buffereduart_ringindicate => '1',
@@ -310,15 +472,16 @@ begin
       iec_data_external => iec_data_external,
       iec_clk_external => iec_clk_external,
       
-      pmod_clock => '0',
-      pmod_start_of_sequence => '1',
-      pmod_data_in => "0000",
-      pmoda => pmoda,
+--      pmod_clock => '0',
+--      pmod_start_of_sequence => '1',
+--      pmod_data_in => "0000",
+--      pmoda => pmoda,
 
       uart_rx => pmodc(1),
       uart_tx => pmodc(2),
 
       miso_i => '1',
+      miso2_i => '1',
 
       aclsck => aclsck,
       aclMISO => '1',
@@ -336,8 +499,11 @@ begin
       eth_rxer => '0',
       eth_interrupt => '0',
 
+      audio_left => audio_left,
+      audio_right => audio_right,
+      
       vsync           => vsync,
-      hsync           => hsync,
+      vga_hsync           => hsync,
       vgared          => vgared,
       vgagreen        => vgagreen,
       vgablue         => vgablue,
@@ -346,6 +512,12 @@ begin
       sw              => sw,
       btn             => btn,
 
+      widget_matrix_col => (others => '1'),
+      widget_restore => '1',
+      widget_capslock => '1',
+      widget_joya => (others => '1'),
+      widget_joyb => (others => '1'),
+      
       -- UART monitor interface
       uart_txd        => uart_txd,
       rsrx            => rsrx,
@@ -368,28 +540,126 @@ begin
     end loop;
   end process;
 
+  process(hr_cs0, hr_clk_p, hr_reset, hr_rwds, hr_d,
+          hr2_cs0, hr2_clk_p, hr2_reset, hr2_rwds, hr2_d
+          ) is
+  begin
+    report
+      "hr_cs0 = " & std_logic'image(hr_cs0) & ", " &
+      "hr_clk_p = " & std_logic'image(hr_clk_p) & ", " &
+      "hr_reset = " & std_logic'image(hr_reset) & ", " &
+      "hr_rwds = " & std_logic'image(hr_rwds) & ", " &
+      "hr_d = " & std_logic'image(hr_d(0))
+      & std_logic'image(hr_d(1))
+      & std_logic'image(hr_d(2))
+      & std_logic'image(hr_d(3))
+      & std_logic'image(hr_d(4))
+      & std_logic'image(hr_d(5))
+      & std_logic'image(hr_d(6))
+      & std_logic'image(hr_d(7))
+      & ".";
+    report
+      "hr2_cs0 = " & std_logic'image(hr2_cs0) & ", " &
+      "hr2_clk_p = " & std_logic'image(hr2_clk_p) & ", " &
+      "hr2_reset = " & std_logic'image(hr2_reset) & ", " &
+      "hr2_rwds = " & std_logic'image(hr2_rwds) & ", " &
+      "hr2_d = " & std_logic'image(hr2_d(0))
+      & std_logic'image(hr2_d(1))
+      & std_logic'image(hr2_d(2))
+      & std_logic'image(hr2_d(3))
+      & std_logic'image(hr2_d(4))
+      & std_logic'image(hr2_d(5))
+      & std_logic'image(hr2_d(6))
+      & std_logic'image(hr2_d(7))
+      & ".";
+  end process;
+
+  process
+  begin  -- process tb
+
+    wait for 3 ns;
+    
+    for i in 1 to 2000000 loop
+      clock27 <= '0';
+      wait for 18519 ps;
+      clock27 <= '1';
+      wait for 18519 ps;      
+    end loop;
+    
+  end process;
+  
   
   process
   begin  -- process tb
     report "beginning simulation" severity note;
+
+    wait for 3 ns;
     
     for i in 1 to 2000000 loop
-      pixelclock <= '0'; cpuclock <= '0'; ioclock <= '0';
-      wait for 2.5 ns;     
-      pixelclock <= '1'; cpuclock <= '0'; ioclock <= '0';
-      wait for 2.5 ns;     
-      pixelclock <= '0'; cpuclock <= '0'; ioclock <= '0';
-      wait for 2.5 ns;     
-      pixelclock <= '1'; cpuclock <= '0'; ioclock <= '0';
-      wait for 2.5 ns;     
-      pixelclock <= '0'; cpuclock <= '1'; ioclock <= '1';
-      wait for 2.5 ns;     
-      pixelclock <= '1'; cpuclock <= '1'; ioclock <= '1';
-      wait for 2.5 ns;     
-      pixelclock <= '0'; cpuclock <= '1'; ioclock <= '1';
-      wait for 2.5 ns;     
-      pixelclock <= '1'; cpuclock <= '1'; ioclock <= '1';
-      wait for 2.5 ns;
+
+    clock325 <= '0';
+    pixelclock <= '0';
+    cpuclock <= '0';
+    clock163 <= '0';
+
+    clock325 <= '1';
+    wait for 1.5 ns;
+    clock325 <= '0';
+    wait for 1.5 ns;
+
+    clock163 <= '1';
+
+    clock325 <= '1';
+    wait for 1.5 ns;
+    clock325 <= '0';
+    wait for 1.5 ns;
+
+    pixelclock <= '1';
+    clock163 <= '0';
+
+    clock325 <= '1';
+    wait for 1.5 ns;
+    clock325 <= '0';
+    wait for 1.5 ns;
+
+    clock163 <= '1';
+
+    clock325 <= '1';
+    wait for 1.5 ns;
+    clock325 <= '0';
+    wait for 1.5 ns;
+
+    pixelclock <= '0';
+    cpuclock <= '1';
+    clock163 <= '0';
+
+    clock325 <= '1';
+    wait for 1.5 ns;
+    clock325 <= '0';
+    wait for 1.5 ns;
+
+    clock163 <= '1';
+
+    clock325 <= '1';
+    wait for 1.5 ns;
+    clock325 <= '0';
+    wait for 1.5 ns;
+
+    pixelclock <= '1';
+    clock163 <= '0';
+
+    clock325 <= '1';
+    wait for 1.5 ns;
+    clock325 <= '0';
+    wait for 1.5 ns;
+
+    clock163 <= '1';
+
+    clock325 <= '1';
+    wait for 1.5 ns;
+    clock325 <= '0';
+    wait for 1.5 ns;
+      
       if i = 10 then
         reset <= '1';
         report "Releasing reset";
@@ -402,26 +672,11 @@ begin
   process
     procedure eth_clock_tick is
     begin
-      -- XXX Doesn't tick the 30, 33 or 40 MHz clocks
+      -- XXX Doesn't tick the 120 or 240 MHz clocks
       clock50mhz <= '0';
-      clock200 <= '0';
-      wait for 2.5 ns;
-      clock200 <= '1';
-      wait for 2.5 ns;
-      clock200 <= '0';
-      wait for 2.5 ns;
-      clock200 <= '1';
-      wait for 2.5 ns;
-
+      wait for 10 ns;
       clock50mhz <= '1';
-      clock200 <= '0';
-      wait for 2.5 ns;
-      clock200 <= '1';
-      wait for 2.5 ns;
-      clock200 <= '0';
-      wait for 2.5 ns;
-      clock200 <= '1';
-      wait for 2.5 ns;
+      wait for 10 ns;
     end procedure;
   begin
     for i in 1 to 20 loop
@@ -470,18 +725,18 @@ begin
   end process;
 
   -- Trigger an IRQ to test branch bug
-  process
-  begin
-    wait for 38180 ns;
-    for i in 1 to 2000 loop
-      irq <= '0';
-      report "triggering IRQ for gs4510";
-      wait for 200 ns;
-      irq <= '1';
-      report "releasing IRQ for gs4510";
-      wait for 190 ns;
-    end loop;
-  end process;
+--  process
+--  begin
+--    wait for 38180 ns;
+--    for i in 1 to 2000 loop
+--      irq <= '0';
+--      report "triggering IRQ for gs4510";
+--      wait for 200 ns;
+--      irq <= '1';
+--      report "releasing IRQ for gs4510";
+--      wait for 190 ns;
+--    end loop;
+--  end process;
   
   process
     variable txbyte : unsigned(7 downto 0) := x"00";
@@ -505,14 +760,7 @@ begin
       wait for 10 ns;
       
     end loop;
-  end process;
-
-  process (clock50mhz) is
-  begin
-    if rising_edge(clock50mhz) then
-      report "PCM digital audio out = " & std_logic'image(pcm_modem1_data_out);
-    end if;
-  end process;
+  end process;  
   
 end behavior;
 

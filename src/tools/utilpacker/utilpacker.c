@@ -1,6 +1,6 @@
 /*
   Utility packer:  Takes one or more program files and attaches them with a header
-  block in the format that Kickstart expects them to be found in the 32KB colour RAM.
+  block in the format that Hyppo expects them to be found in the 32KB colour RAM.
   These are the utilities that the hypervisor can launch, without needing to load
   anything from SD card or other storage.
 
@@ -156,6 +156,13 @@ int main(int argc,char **argv)
   // Skip the first 2KB (plus a bit to work around a VIC-IV bug) of colour RAM, as it is used by C65 system.  This leaves
   // us 30KB of available space.
   int ar_offset=2048+80;
+
+  // Put some values in colour ram for testing alpha blending in simulation
+  for(int i=0;i<0xff;i+=2)
+    {
+      archive[i]=0x20; // alpha mode
+      archive[i+1]=0x01; // foreground = white
+    }
   
   for(int i=2;i<argc;i++)
     {

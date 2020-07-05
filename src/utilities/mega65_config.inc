@@ -46,6 +46,7 @@
 ;	40	- 	Blank line, no data
 ;	50	-	MAC Address input.  requires 1 string (label), word
 ;			offset and data	area of 6 bytes for storage of address.
+;       60      -       time/date
 ;	
 ;===============================================================================
 
@@ -58,11 +59,12 @@ configMagicByte1	=	$01
 
 
 ;-------------------------------------------------------------------------------
-;System tab
+;Input tab
 ;-------------------------------------------------------------------------------
-systemPageCnt	=	1
+inputPageCnt	=	1
 	
-systemOptions0:
+inputOptions0:
+
 	.byte		$20			;option input type
 	.word		$0005			;offset into config table
 	.byte		$02			;bits for testing/setting
@@ -93,19 +95,35 @@ systemOptions0:
 
 
 	.byte		$00			;end of list type
-systemOptions0_end:
-	.assert		(systemOptions0_end - systemOptions0) < 256, error, "System Options too large!"
+inputOptions0_end:
+	.assert		(inputOptions0_end - inputOptions0) < 256, error, "Input Options too large!"
 
-systemPageIndex:
-	.word		systemOptions0
+inputPageIndex:
+	.word		inputOptions0
 	
 
 ;-------------------------------------------------------------------------------
-;Disk tab
+;Chipset tab
 ;-------------------------------------------------------------------------------
-diskPageCnt 	=	1
+chipsetPageCnt 	=	1
 
-diskOptions0:
+chipsetOptions0:
+	; Dummy field for RTC values.
+  	; In reality, we read it from the RTC, and write the values
+	; back there.
+	.byte		$60	
+	.word		$01f0
+	.defPStr	"real-time clock:"
+rtc_values:
+	.byte		$00, $00, $00, $00, $00, $00
+
+	.byte		$20			;option input type
+	.word		$0020			;offset into config table
+	.byte		$01			;bits for testing/setting
+	.defPStr	"dmagic revision:"	;label
+	.defPStr	'f018 (c65 roms < 910523)'		;option unset
+	.defPStr	"f018b (c65 roms >= 910523)"	;option set
+
 	.byte		$20			;option input type
 	.word		$0004			;offset into config table
 	.byte		$01			;bits for testing/setting
@@ -124,11 +142,11 @@ diskOptions0:
 	.byte		$00, $00, $00, $00
 
 	.byte		$00			;end of list type
-diskOptions0_end:
-	.assert		(diskOptions0_end - diskOptions0) < 256, error, "Disk Options 0 too large!"
+chipsetOptions0_end:
+	.assert		(chipsetOptions0_end - chipsetOptions0) < 256, error, "Chipset Options 0 too large!"
 
-diskPageIndex:
-	.word		diskOptions0
+chipsetPageIndex:
+	.word		chipsetOptions0
 	
 	
 ;-------------------------------------------------------------------------------
@@ -141,8 +159,8 @@ videoOptions0:
 	.word		$0002
 	.byte		$80
 	.defPStr	"video mode:"
-	.defPStr	"pal  50hz (800*600)"
-	.defPStr	"ntsc 60hz (800*600)"
+	.defPStr	"pal  50hz (720*576)"
+	.defPStr	"ntsc 60hz (720*480)"
 	.byte		$00
 videoOptions0_end:
 	.assert		(videoOptions0_end - videoOptions0) < 256, error, "Video Options 0 too large!"
@@ -172,12 +190,11 @@ audioOptions0:
 	.defPStr	"yes"
 
 	.byte		$20
-	.word		$0003
-	.byte		$80
-	.defPStr	"dac algorithm:"
-	.defPStr	"pdm"
-	.defPStr	"pwm"
-
+	.word		$000c
+	.byte		$01
+	.defPStr	"sfx cart emulation @ $df40:"
+	.defPStr	"off"
+	.defPStr	"on"
 
 	.byte		$20
 	.word		$0003
@@ -221,13 +238,13 @@ savePageCnt	=	1
 ;Do not change the order or number of options in these lists!
 ;*******************************************************************************
 saveOptions0:
-	.byte		$10
-	.defPStr	"exit without saving"
-	.byte		$10
-	.defPStr	"apply settings now"
-	.byte		$10
-	.defPStr	"save for this boot and exit"
-	.byte		$10
+	.byte           $10
+	.defPStr        "exit without saving"
+       	.byte           $10
+        .defPStr        "apply and test settings now"
+        .byte           $10
+        .defPStr        "restore factory defaults"  
+ 	.byte		$10
 	.defPStr	"save as defaults and exit"
 	.byte		$00
 	

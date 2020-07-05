@@ -59,7 +59,9 @@ int main(int argc,char **argv)
   unsigned char archive[ar_size];
 
   // Start with empty memory
-  bzero(archive,ar_size);
+  // Some C compilers don't seem to have bzero on mingw, so just work around it.
+  for (int i=0;i<ar_size;i++) archive[i]=0;
+ //  bzero(archive,ar_size);
 
   int opt;
   while ((opt = getopt(argc, argv, "f:n:s:")) != -1) {
@@ -106,13 +108,15 @@ int main(int argc,char **argv)
 	  "  signal no_write_count : unsigned(7 downto 0) := x\"00\";\n"
 	  "  \n"
 	  "  type ram_t is array (0 to %d) of unsigned(7 downto 0);\n"
-	  "  shared variable ram : ram_t := (\n",
+	  "  constant initram : ram_t := (\n",
 	  name,bytes,name,name,bytes);
 
   for(i=0;i<bytes;i++)
 //    if (archive[i])
-    fprintf(o,"          %d => x\"%02x\", -- $%05x\n",i,archive[i],i);
-  fprintf(o,"          %d => x\"%02x\"); -- $%05x\n",i,archive[i],i);
+    fprintf(o,"          x\"%02x\", -- $%05x\n",archive[i],i);
+  fprintf(o,"          x\"%02x\"); -- $%05x\n",archive[i],i);
+
+  fprintf(o,"  shared variable ram : ram_t := initram;\n");
   
   // fprintf(o,"          others => x\"00\");\n" 
   fprintf(o,

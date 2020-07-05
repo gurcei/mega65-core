@@ -131,6 +131,7 @@ set files [list \
  "[file normalize "$origin_dir/src/vhdl/pcm_transceiver.vhdl"]"\
  "[file normalize "$origin_dir/src/vhdl/touch.vhdl"]"\
  "[file normalize "$origin_dir/src/vhdl/i2c_master.vhdl"]"\
+ "[file normalize "$origin_dir/src/vhdl/i2c_wrapper.vhdl"]"\
  "[file normalize "$origin_dir/src/vhdl/mfm_bits_to_bytes.vhdl"]"\
  "[file normalize "$origin_dir/src/vhdl/mfm_decoder.vhdl"]"\
  "[file normalize "$origin_dir/src/vhdl/mfm_gaps_to_bits.vhdl"]"\
@@ -146,19 +147,24 @@ set files [list \
  "[file normalize "$origin_dir/src/vhdl/ghdl_alpha_blend.vhdl"]"\
  "[file normalize "$origin_dir/src/vhdl/framepacker.vhdl"]"\
  "[file normalize "$origin_dir/src/vhdl/ethernet.vhdl"]"\
+ "[file normalize "$origin_dir/src/vhdl/reconfig.vhdl"]"\
+ "[file normalize "$origin_dir/src/vhdl/asym_ram.vhdl"]"\
  "[file normalize "$origin_dir/src/vhdl/ethernet_miim.vhdl"]"\
  "[file normalize "$origin_dir/src/vhdl/cia6526.vhdl"]"\
  "[file normalize "$origin_dir/src/vhdl/c65uart.vhdl"]"\
  "[file normalize "$origin_dir/src/vhdl/mouse_input.vhdl"]"\
  "[file normalize "$origin_dir/src/vhdl/version.vhdl"]"\
- "[file normalize "$origin_dir/src/vhdl/kickstart.vhdl"]"\
+ "[file normalize "$origin_dir/src/vhdl/hyppo.vhdl"]"\
  "[file normalize "$origin_dir/src/vhdl/charrom.vhdl"]"\
  "[file normalize "$origin_dir/src/vhdl/frame_generator.vhdl"]"\
  "[file normalize "$origin_dir/src/vhdl/pixel_driver.vhdl"]"\
+ "[file normalize "$origin_dir/src/vhdl/pixel_fifo.vhdl"]"\
  "[file normalize "$origin_dir/src/vhdl/viciv.vhdl"]"\
- "[file normalize "$origin_dir/src/vhdl/uart_monitor.vhdl"]"\
  "[file normalize "$origin_dir/src/vhdl/iomapper.vhdl"]"\
  "[file normalize "$origin_dir/src/vhdl/gs4510.vhdl"]"\
+ "[file normalize "$origin_dir/src/vhdl/vfpga/overlay_IP.vhdl"]"\
+ "[file normalize "$origin_dir/src/vhdl/vfpga/vfpga_clock_controller_pausable.vhdl"]"\
+ "[file normalize "$origin_dir/src/vhdl/vfpga/vfpga_wrapper_8bit.vhdl"]"\
  "[file normalize "$origin_dir/src/vhdl/divider32.vhdl"]"\
  "[file normalize "$origin_dir/src/vhdl/shifter32.vhdl"]"\
  "[file normalize "$origin_dir/src/vhdl/multiply32.vhdl"]"\
@@ -183,6 +189,22 @@ set files [list \
  "[file normalize "$origin_dir/src/vhdl/termmem.vhdl"]"\
  "[file normalize "$origin_dir/src/vhdl/lfsr16.vhdl"]"\
  "[file normalize "$origin_dir/src/vhdl/ram32x1024.vhdl"]"\
+ "[file normalize "$origin_dir/src/vhdl/internal1541.vhdl"]"\
+ "[file normalize "$origin_dir/src/vhdl/m6522.vhdl"]"\
+ "[file normalize "$origin_dir/src/vhdl/driverom.vhdl"]"\
+ "[file normalize "$origin_dir/src/vhdl/dpram8x4096.vhdl"]"\
+ "[file normalize "$origin_dir/src/vhdl/kb_matrix_ram.vhdl"]"\
+ "[file normalize "$origin_dir/src/verilog/6502_alu.v"]"\
+ "[file normalize "$origin_dir/src/verilog/6502_mux.v"]"\
+ "[file normalize "$origin_dir/src/verilog/6502_reg.v"]"\
+ "[file normalize "$origin_dir/src/verilog/6502_timing.v"]"\
+ "[file normalize "$origin_dir/src/verilog/6502_top.v"]"\
+ "[file normalize "$origin_dir/src/verilog/6502_ucode.v"]"\
+ "[file normalize "$origin_dir/src/verilog/monitor_top.v"]"\
+ "[file normalize "$origin_dir/src/verilog/monitor_mem.v"]"\
+ "[file normalize "$origin_dir/src/verilog/monitor_ctrl.v"]"\
+ "[file normalize "$origin_dir/src/verilog/monitor_bus.v"]"\
+ "[file normalize "$origin_dir/src/verilog/asym_ram_sdp.v"]"\
 ]
 set imported_files [add_files -fileset sources_1 $files]
 
@@ -318,6 +340,10 @@ set file "vhdl/ethernet_miim.vhdl"
 set file_obj [get_files -of_objects [get_filesets sources_1] [list "*$file"]]
 set_property -name "file_type" -value "VHDL" -objects $file_obj
 
+set file "vhdl/asym_ram.vhdl"
+set file_obj [get_files -of_objects [get_filesets sources_1] [list "*$file"]]
+set_property -name "file_type" -value "VHDL" -objects $file_obj
+
 set file "vhdl/crc.vhdl"
 set file_obj [get_files -of_objects [get_filesets sources_1] [list "*$file"]]
 set_property -name "file_type" -value "VHDL" -objects $file_obj
@@ -366,7 +392,7 @@ set file "vhdl/lfsr16.vhdl"
 set file_obj [get_files -of_objects [get_filesets sources_1] [list "*$file"]]
 set_property -name "file_type" -value "VHDL" -objects $file_obj
 
-set file "vhdl/kickstart.vhdl"
+set file "vhdl/hyppo.vhdl"
 set file_obj [get_files -of_objects [get_filesets sources_1] [list "*$file"]]
 set_property -name "file_type" -value "VHDL" -objects $file_obj
 
@@ -406,6 +432,10 @@ set file "vhdl/ethernet.vhdl"
 set file_obj [get_files -of_objects [get_filesets sources_1] [list "*$file"]]
 set_property -name "file_type" -value "VHDL" -objects $file_obj
 
+set file "vhdl/reconfig.vhdl"
+set file_obj [get_files -of_objects [get_filesets sources_1] [list "*$file"]]
+set_property -name "file_type" -value "VHDL" -objects $file_obj
+
 set file "vhdl/colourram.vhdl"
 set file_obj [get_files -of_objects [get_filesets sources_1] [list "*$file"]]
 set_property -name "file_type" -value "VHDL" -objects $file_obj
@@ -434,11 +464,11 @@ set file "vhdl/pixel_driver.vhdl"
 set file_obj [get_files -of_objects [get_filesets sources_1] [list "*$file"]]
 set_property -name "file_type" -value "VHDL" -objects $file_obj
 
-set file "vhdl/viciv.vhdl"
+set file "vhdl/pixel_fifo.vhdl"
 set file_obj [get_files -of_objects [get_filesets sources_1] [list "*$file"]]
 set_property -name "file_type" -value "VHDL" -objects $file_obj
 
-set file "vhdl/uart_monitor.vhdl"
+set file "vhdl/viciv.vhdl"
 set file_obj [get_files -of_objects [get_filesets sources_1] [list "*$file"]]
 set_property -name "file_type" -value "VHDL" -objects $file_obj
 
@@ -451,6 +481,18 @@ set file_obj [get_files -of_objects [get_filesets sources_1] [list "*$file"]]
 set_property -name "file_type" -value "VHDL" -objects $file_obj
 
 set file "vhdl/iomapper.vhdl"
+set file_obj [get_files -of_objects [get_filesets sources_1] [list "*$file"]]
+set_property -name "file_type" -value "VHDL" -objects $file_obj
+
+set file "vhdl/vfpga/overlay_IP.vhdl"
+set file_obj [get_files -of_objects [get_filesets sources_1] [list "*$file"]]
+set_property -name "file_type" -value "VHDL" -objects $file_obj
+
+set file "vhdl/vfpga/vfpga_wrapper_8bit.vhdl"
+set file_obj [get_files -of_objects [get_filesets sources_1] [list "*$file"]]
+set_property -name "file_type" -value "VHDL" -objects $file_obj
+
+set file "vhdl/vfpga/vfpga_clock_controller_pausable.vhdl"
 set file_obj [get_files -of_objects [get_filesets sources_1] [list "*$file"]]
 set_property -name "file_type" -value "VHDL" -objects $file_obj
 
@@ -538,6 +580,53 @@ set file "vhdl/ram32x1024.vhdl"
 set file_obj [get_files -of_objects [get_filesets sources_1] [list "*$file"]]
 set_property -name "file_type" -value "VHDL" -objects $file_obj
 
+set file "vhdl/kb_matrix_ram.vhdl"
+set file_obj [get_files -of_objects [get_filesets sources_1] [list "*$file"]]
+set_property -name "file_type" -value "VHDL" -objects $file_obj
+
+set file "verilog/6502_alu.v"
+set file_obj [get_files -of_objects [get_filesets sources_1] [list "*$file"]]
+set_property -name "file_type" -value "Verilog" -objects $file_obj
+
+set file "verilog/6502_mux.v"
+set file_obj [get_files -of_objects [get_filesets sources_1] [list "*$file"]]
+set_property -name "file_type" -value "Verilog" -objects $file_obj
+
+set file "verilog/6502_reg.v"
+set file_obj [get_files -of_objects [get_filesets sources_1] [list "*$file"]]
+set_property -name "file_type" -value "Verilog" -objects $file_obj
+
+set file "verilog/6502_timing.v"
+set file_obj [get_files -of_objects [get_filesets sources_1] [list "*$file"]]
+set_property -name "file_type" -value "Verilog" -objects $file_obj
+
+set file "verilog/6502_top.v"
+set file_obj [get_files -of_objects [get_filesets sources_1] [list "*$file"]]
+set_property -name "file_type" -value "Verilog" -objects $file_obj
+
+set file "verilog/6502_ucode.v"
+set file_obj [get_files -of_objects [get_filesets sources_1] [list "*$file"]]
+set_property -name "file_type" -value "Verilog" -objects $file_obj
+
+set file "verilog/monitor_top.v"
+set file_obj [get_files -of_objects [get_filesets sources_1] [list "*$file"]]
+set_property -name "file_type" -value "Verilog" -objects $file_obj
+
+set file "verilog/monitor_mem.v"
+set file_obj [get_files -of_objects [get_filesets sources_1] [list "*$file"]]
+set_property -name "file_type" -value "Verilog" -objects $file_obj
+
+set file "verilog/monitor_ctrl.v"
+set file_obj [get_files -of_objects [get_filesets sources_1] [list "*$file"]]
+set_property -name "file_type" -value "Verilog" -objects $file_obj
+
+set file "verilog/monitor_bus.v"
+set file_obj [get_files -of_objects [get_filesets sources_1] [list "*$file"]]
+set_property -name "file_type" -value "Verilog" -objects $file_obj
+
+set file "verilog/asym_ram_sdp.v"
+set file_obj [get_files -of_objects [get_filesets sources_1] [list "*$file"]]
+set_property -name "file_type" -value "Verilog" -objects $file_obj
 
 # Set 'sources_1' fileset properties
 set obj [get_filesets sources_1]
@@ -618,7 +707,7 @@ if { [ string equal [get_report_configs -of_objects [get_runs impl_1] impl_1_ini
 }
 set obj [get_report_configs -of_objects [get_runs impl_1] impl_1_init_report_timing_summary_0]
 if { $obj != "" } {
-set_property -name "is_enabled" -value "0" -objects $obj
+set_property -name "is_enabled" -value "1" -objects $obj
 
 }
 # Create 'impl_1_opt_report_drc_0' report (if not found)

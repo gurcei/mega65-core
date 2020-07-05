@@ -34,151 +34,53 @@ use Std.TextIO.all;
 
 entity container is
   Port ( CLK_IN : STD_LOGIC;         
-         btnCpuReset : in  STD_LOGIC;
+--         btnCpuReset : in  STD_LOGIC;
 --         irq : in  STD_LOGIC;
 --         nmi : in  STD_LOGIC;
-         
-         ----------------------------------------------------------------------
-         -- CIA1 ports for keyboard/joystick 
-         ----------------------------------------------------------------------
---         porta_pins : inout  std_logic_vector(7 downto 0);
---         portb_pins : inout  std_logic_vector(7 downto 0);
-         
-         ----------------------------------------------------------------------
-         -- VGA output
-         ----------------------------------------------------------------------
-         vsync : out STD_LOGIC;
-         hsync : out  STD_LOGIC;
-         vgared : out  UNSIGNED (3 downto 0);
-         vgagreen : out  UNSIGNED (3 downto 0);
-         vgablue : out  UNSIGNED (3 downto 0);
 
-         ---------------------------------------------------------------------------
-         -- IO lines to the ethernet controller
-         ---------------------------------------------------------------------------
-         eth_mdio : inout std_logic;
-         eth_mdc : out std_logic;
-         eth_reset : out std_logic;
-         eth_rxd : in unsigned(1 downto 0);
-         eth_txd : out unsigned(1 downto 0);
-         eth_rxer : in std_logic;
-         eth_txen : out std_logic;
-         eth_rxdv : in std_logic;
-         eth_interrupt : in std_logic;
-         eth_clock : out std_logic;
-         
-         -------------------------------------------------------------------------
-         -- Lines for the SDcard interface itself
-         -------------------------------------------------------------------------
-         sdReset : out std_logic := '0';  -- must be 0 to power SD controller (cs_bo)
-         sdClock : out std_logic;       -- (sclk_o)
-         sdMOSI : out std_logic;      
-         sdMISO : in  std_logic;
-
-         ---------------------------------------------------------------------------
-         -- Lines for other devices that we handle here
-         ---------------------------------------------------------------------------
-         aclMISO : in std_logic;
-         aclMOSI : out std_logic;
-         aclSS : out std_logic;
-         aclSCK : out std_logic;
-         aclInt1 : in std_logic;
-         aclInt2 : in std_logic;
-         
-         micData : in std_logic;
-         micClk : out std_logic;
-         micLRSel : out std_logic;
-
-         ampPWM : out std_logic;
-         ampSD : out std_logic;
-
-         tmpSDA : out std_logic;
-         tmpSCL : out std_logic;
-         tmpInt : in std_logic;
-         tmpCT : in std_logic;
+         fpga_pins : out std_logic_vector(1 to 100) := (others => '1');
          
          ----------------------------------------------------------------------
-         -- PS/2 keyboard interface
+         -- HyperRAM as expansion RAM
          ----------------------------------------------------------------------
-         ps2clk : in std_logic;
-         ps2data : in std_logic;
-
-         ----------------------------------------------------------------------
-         -- PMOD B for input PCB
-         ----------------------------------------------------------------------
-         jblo : inout std_logic_vector(4 downto 1) := (others => 'Z');
-         jbhi : inout std_logic_vector(10 downto 7) := (others => 'Z');
-         
-         ----------------------------------------------------------------------
-         -- PMOD A for general IO while debugging and testing
-         ----------------------------------------------------------------------
-         jalo : inout std_logic_vector(4 downto 1) := (others => 'Z');
-         jahi : inout std_logic_vector(10 downto 7) := (others => 'Z');
-         jdlo : inout std_logic_vector(4 downto 1) := (others => 'Z');
-         jdhi : inout std_logic_vector(10 downto 7) := (others => 'Z');
-         jclo : inout std_logic_vector(4 downto 1) := (others => 'Z');
-         jchi : inout std_logic_vector(10 downto 7) := (others => 'Z');
+         hr_d : inout unsigned(7 downto 0) := (others => '1');
+         hr_rwds : inout std_logic := '1';
+         hr_reset : out std_logic := '1';
+         hr_clk_n : out std_logic := '1';
+         hr_clk_p : out std_logic := '1';
+         hr_cs0 : out std_logic := '1';
+         hr_cs1 : out std_logic := '1';
          
          ----------------------------------------------------------------------
          -- Flash RAM for holding config
          ----------------------------------------------------------------------
---         QspiSCK : out std_logic;
-         QspiDB : inout std_logic_vector(3 downto 0);
-         QspiCSn : out std_logic;
+--         QspiSCK : out std_logic := '1';
+         QspiDB : inout std_logic_vector(3 downto 0) := (others => 'Z');
+         QspiCSn : out std_logic := '1';
          
          ----------------------------------------------------------------------
-         -- Cellular RAM interface for Slow RAM
+         -- Debug interfaces on TE0725
          ----------------------------------------------------------------------
-         --RamCLK : out std_logic;
-         --RamADVn : out std_logic;
-         --RamCEn : out std_logic;
-         --RamCRE : out std_logic;
-         --RamOEn : out std_logic;
-         --RamWEn : out std_logic;
-         --RamUBn : out std_logic;
-         --RamLBn : out std_logic;
-         --RamWait : in std_logic;
-         --MemDB : inout std_logic_vector(15 downto 0);
-         --MemAdr : inout std_logic_vector(22 downto 0);
---         ddr2_addr      : out   std_logic_vector(12 downto 0);
---         ddr2_ba        : out   std_logic_vector(2 downto 0);
---         ddr2_ras_n     : out   std_logic;
---         ddr2_cas_n     : out   std_logic;
---         ddr2_we_n      : out   std_logic;
---         ddr2_ck_p      : out   std_logic_vector(0 downto 0);
---         ddr2_ck_n      : out   std_logic_vector(0 downto 0);
---         ddr2_cke       : out   std_logic_vector(0 downto 0);
---         ddr2_cs_n      : out   std_logic_vector(0 downto 0);
---         ddr2_dm        : out   std_logic_vector(1 downto 0);
---         ddr2_odt       : out   std_logic_vector(0 downto 0);
---         ddr2_dq        : inout std_logic_vector(15 downto 0);
---         ddr2_dqs_p     : inout std_logic_vector(1 downto 0);
---         ddr2_dqs_n     : inout std_logic_vector(1 downto 0);
-         
-         ----------------------------------------------------------------------
-         -- Debug interfaces on Nexys4 board
-         ----------------------------------------------------------------------
-         led : out std_logic_vector(15 downto 0);
-         sw : in std_logic_vector(15 downto 0);
-         btn : in std_logic_vector(4 downto 0);
+         led : inout std_logic := '1';
 
-         UART_TXD : out std_logic;
-         RsRx : in std_logic;
+         ----------------------------------------------------------------------
+         -- UART monitor interface
+         ----------------------------------------------------------------------
+         monitor_tx : out std_logic := '1';
+         monitor_rx : in std_logic
          
-         sseg_ca : out std_logic_vector(7 downto 0);
-         sseg_an : out std_logic_vector(7 downto 0)
          );
 end container;
 
 architecture Behavioral of container is
-
+  
   component fpgatemp is
     Generic ( DELAY_CYCLES : natural := 480 ); -- 10us @ 48 Mhz
     Port ( clk : in  STD_LOGIC;
            rst : in  STD_LOGIC;
            temp : out  STD_LOGIC_VECTOR (11 downto 0));
   end component;
-  
+
   signal irq : std_logic := '1';
   signal nmi : std_logic := '1';
   signal restore_key : std_logic := '1';
@@ -186,381 +88,645 @@ architecture Behavioral of container is
   signal cpu_game : std_logic := '1';
   signal cpu_exrom : std_logic := '1';
   
-  signal dummy_vgared : unsigned(3 downto 0);
-  signal dummy_vgagreen : unsigned(3 downto 0);
-  signal dummy_vgablue : unsigned(3 downto 0);
-
-  signal buffer_vgared : unsigned(7 downto 0);
-  signal buffer_vgagreen : unsigned(7 downto 0);
-  signal buffer_vgablue : unsigned(7 downto 0);
   
   signal pixelclock : std_logic;
   signal cpuclock : std_logic;
+  signal clock240 : std_logic;
+  signal clock120 : std_logic;
+  signal clock100 : std_logic;
+  signal ethclock : std_logic;
   signal clock200 : std_logic;
-  signal clock40 : std_logic;
-  signal clock33 : std_logic;
-  signal clock30 : std_logic;
-  
-  signal segled_counter : unsigned(31 downto 0) := (others => '0');
 
-  signal slow_access_request_toggle : std_logic;
-  signal slow_access_ready_toggle : std_logic;
-  signal slow_access_write : std_logic;
-  signal slow_access_address : unsigned(27 downto 0);
-  signal slow_access_wdata : unsigned(7 downto 0);
-  signal slow_access_rdata : unsigned(7 downto 0);
+  signal i2s_master_clk_int : std_logic := '0';
+  signal i2s_master_clk : std_logic := '0';
+  signal i2s_sync : std_logic := '0';
+  signal i2s_sync_int : std_logic := '0';
+  signal sample : unsigned(15 downto 0) := x"0001";
+  signal table_offset : integer range 0 to 255 := 0;
+  signal table_dir : std_logic := '1';
+  signal table_neg : std_logic := '0';
+  signal divisor : integer := 0;
+  constant divisor_max : integer := 40000000/(256*4)/1;  -- proceed it really slowly
 
-  signal sector_buffer_mapped : std_logic;
+  constant max_table_value: integer := 255;
+  subtype table_value_type is integer range 0 to 255;
 
-  
-  signal vgaredignore : unsigned(3 downto 0);
-  signal vgagreenignore : unsigned(3 downto 0);
-  signal vgablueignore : unsigned(3 downto 0);
+  constant max_table_index: integer := 255;
+  subtype table_index_type is integer range 0 to 255;
 
-  signal porta_pins : std_logic_vector(7 downto 0) := (others => '1');
-  signal portb_pins : std_logic_vector(7 downto 0) := (others => '1');
+  subtype sine_vector_type is std_logic_vector( 8 downto 0 );
 
-  signal cart_ctrl_dir : std_logic := 'Z';
-  signal cart_haddr_dir : std_logic := 'Z';
-  signal cart_laddr_dir : std_logic := 'Z';
-  signal cart_data_dir : std_logic := 'Z';
-  signal cart_phi2 : std_logic := 'Z';
-  signal cart_dotclock : std_logic := 'Z';
-  signal cart_reset : std_logic := 'Z';
-
-  signal cart_nmi : std_logic := 'Z';
-  signal cart_irq : std_logic := 'Z';
-  signal cart_dma : std_logic := 'Z';
-
-  signal cart_exrom : std_logic := 'Z';
-  signal cart_ba : std_logic := 'Z';
-  signal cart_rw : std_logic := 'Z';
-  signal cart_roml : std_logic := 'Z';
-  signal cart_romh : std_logic := 'Z';
-  signal cart_io1 : std_logic := 'Z';
-  signal cart_game : std_logic := 'Z';
-  signal cart_io2 : std_logic := 'Z';
-
-  signal cart_d : unsigned(7 downto 0) := (others => 'Z');
-  signal cart_d_read : unsigned(7 downto 0) := (others => 'Z');
-  signal cart_a : unsigned(15 downto 0) := (others => 'Z');
-  
-  ----------------------------------------------------------------------
-  -- CBM floppy serial port
-  ----------------------------------------------------------------------
-  signal iec_clk_en : std_logic := 'Z';
-  signal iec_data_en : std_logic := 'Z';
-  signal iec_data_o : std_logic := 'Z';
-  signal iec_reset : std_logic := 'Z';
-  signal iec_clk_o : std_logic := 'Z';
-  signal iec_data_i : std_logic := '1';
-  signal iec_clk_i : std_logic := '1';
-  signal iec_atn : std_logic := 'Z';  
-
-  
-  -- XXX We should read the real temperature and feed this to the DDR controller
-  -- so that it can update timing whenever the temperature changes too much.
-  signal fpga_temperature : std_logic_vector(11 downto 0) := (others => '0');
-
-  signal ampPWM_internal : std_logic;
-  signal dummy : std_logic_vector(2 downto 0);
-  signal sawtooth_phase : integer := 0;
-  signal sawtooth_counter : integer := 0;
-  signal sawtooth_level : integer := 0;
-
-  signal lcd_pixel_strobe : std_logic;
-  signal lcd_hsync : std_logic;
-  signal lcd_vsync : std_logic;
-  signal lcd_display_enable : std_logic;
-  
 begin
+  
+  gen_pin1:
+  for i in 1 to 70 generate
+      pin1: entity work.pin_id
+        port map (
+          clock => pixelclock,
+          pin_number => to_unsigned(i,8),
+          pin => fpga_pins(i)
+          );
+  end generate gen_pin1;
+  gen_pin2:
+  for i in 75 to 100 generate
+      pin2: entity work.pin_id
+        port map (
+          clock => pixelclock,
+          pin_number => to_unsigned(i,8),
+          pin => fpga_pins(i)
+          );
+  end generate gen_pin2;
+
+  i2sclock2: entity work.i2s_clock
+    generic map (
+      -- Modems and some other peripherals only need 8KHz,
+      sample_rate => 44100
+      )
+    port map (
+      clock50mhz => ethclock,
+      i2s_clk => i2s_master_clk_int,
+      i2s_sync => i2s_sync_int);
+  
+  -- I2S master for stereo speakers
+  i2s4: entity work.i2s_transceiver port map (
+    clock50mhz => ethclock,
+    i2s_clk => i2s_master_clk_int,
+    i2s_sync => i2s_sync_int,
+    pcm_out => fpga_pins(71),
+    pcm_in => '0',
+    tx_sample_left => sample,
+    tx_sample_right => sample
+    );
+
+  fpga_pins(74) <= i2s_master_clk;
+  fpga_pins(72) <= i2s_sync;
   
   dotclock1: entity work.dotclock100
     port map ( clk_in1 => CLK_IN,
-               clock100 => pixelclock, -- 100MHz
-               clock50 => cpuclock, -- 50MHz
-               clock40 => clock40,
-               clock33 => clock33,
-               clock30 => clock30,
-               clock200 => clock200
+               clock80 => pixelclock, -- 80MHz
+               clock40 => cpuclock, -- 40MHz
+               clock50 => ethclock,
+               clock200 => clock200,
+               clock100 => clock100,
+               clock120 => clock120,
+               clock240 => clock240
                );
 
-  fpgatemp0: fpgatemp
-    generic map (DELAY_CYCLES => 480)
-    port map (
-      rst => '0',
-      clk => cpuclock,
-      temp => fpga_temperature);
-
-  slow_devices0: entity work.slow_devices
-    port map (
-      cpuclock => cpuclock,
-      pixelclock => pixelclock,
-      reset => reset_out,
-      cpu_exrom => cpu_exrom,
-      cpu_game => cpu_game,
-      sector_buffer_mapped => sector_buffer_mapped,
-      
-      qspidb => qspidb,
-      qspicsn => qspicsn,      
---      qspisck => '1',
-
-      slow_access_request_toggle => slow_access_request_toggle,
-      slow_access_ready_toggle => slow_access_ready_toggle,
-      slow_access_write => slow_access_write,
-      slow_access_address => slow_access_address,
-      slow_access_wdata => slow_access_wdata,
-      slow_access_rdata => slow_access_rdata,
-      
-      ----------------------------------------------------------------------
-      -- Expansion/cartridge port
-      ----------------------------------------------------------------------
-      cart_ctrl_dir => cart_ctrl_dir,
-      cart_haddr_dir => cart_haddr_dir,
-      cart_laddr_dir => cart_laddr_dir,
-      cart_data_dir => cart_data_dir,
-      cart_phi2 => cart_phi2,
-      cart_dotclock => cart_dotclock,
-      cart_reset => cart_reset,
-      
-      cart_nmi => cart_nmi,
-      cart_irq => cart_irq,
-      cart_dma => cart_dma,
-      
-      cart_exrom => cart_exrom,
-      cart_ba => cart_ba,
-      cart_rw => cart_rw,
-      cart_roml => cart_roml,
-      cart_romh => cart_romh,
-      cart_io1 => cart_io1,
-      cart_game => cart_game,
-      cart_io2 => cart_io2,
-      
-      cart_d_in => cart_d_read,
-      cart_d => cart_d,
-      cart_a => cart_a
-      );
-  
-  machine0: entity work.machine
-    generic map (cpufrequency => 50)
-    port map (
-      pixelclock      => pixelclock,
-      cpuclock        => cpuclock,
-      clock200 => clock200,
-      clock40 => clock40,
-      clock33 => clock33,
-      clock30 => clock30,
-      clock50mhz      => cpuclock,
-      uartclock       => cpuclock, -- Match CPU clock
-      ioclock         => cpuclock, -- Match CPU clock
-      btncpureset => btncpureset,
-      reset_out => reset_out,
-      irq => irq,
-      nmi => nmi,
-      restore_key => restore_key,
-      sector_buffer_mapped => sector_buffer_mapped,
-
-      -- Wire up a dummy caps_lock key on switch 8
-      caps_lock_key => sw(8),
-
-      fa_fire => '1',
-      fa_up =>  '1',
-      fa_left => '1',
-      fa_down => '1',
-      fa_right => '1',
-
-      fb_fire => '1',
-      fb_up => '1',
-      fb_left => '1',
-      fb_down => '1',
-      fb_right => '1',
-
-      fa_potx => '0',
-      fa_poty => '0',
-      fb_potx => '0',
-      fb_poty => '0',
-
-      f_index => '1',
-      f_track0 => '1',
-      f_writeprotect => '1',
-      f_rdata => '1',
-      f_diskchanged => '1',
-      
-      ----------------------------------------------------------------------
-      -- CBM floppy  std_logic_vectorerial port
-      ----------------------------------------------------------------------
-      iec_clk_en => iec_clk_en,
-      iec_data_en => iec_data_en,
-      iec_data_o => iec_data_o,
-      iec_reset => iec_reset,
-      iec_clk_o => iec_clk_o,
-      iec_atn_o => iec_atn,
-      iec_data_external => iec_data_i,
-      iec_clk_external => iec_clk_i,
-      
-      no_kickstart => '0',
-      
-      vsync           => vsync,
-      hsync           => hsync,
-      lcd_vsync => lcd_vsync,
-      lcd_hsync => lcd_hsync,
-      lcd_display_enable => lcd_display_enable,
-      lcd_pixel_strobe => lcd_pixel_strobe,
-      vgared(7 downto 0)          => buffer_vgared,
-      vgagreen(7 downto 0)        => buffer_vgagreen,
-      vgablue(7 downto 0)         => buffer_vgablue,
-
-      porta_pins => porta_pins,
-      portb_pins => portb_pins,
-      keyleft => '0',
-      keyup => '0',
-      
-      ---------------------------------------------------------------------------
-      -- IO lines to the ethernet controller
-      ---------------------------------------------------------------------------
-      eth_mdio => eth_mdio,
-      eth_mdc => eth_mdc,
-      eth_reset => eth_reset,
-      eth_rxd => eth_rxd,
-      eth_txd => eth_txd,
-      eth_txen => eth_txen,
-      eth_rxer => eth_rxer,
-      eth_rxdv => eth_rxdv,
-      eth_interrupt => eth_interrupt,
-      
-      -------------------------------------------------------------------------
-      -- Lines for the SDcard interface itself
-      -------------------------------------------------------------------------
-      cs_bo => sdReset,
-      sclk_o => sdClock,
-      mosi_o => sdMOSI,
-      miso_i => sdMISO,
-
-      aclMISO => aclMISO,
-      aclMOSI => aclMOSI,
-      aclSS => aclSS,
-      aclSCK => aclSCK,
-      aclInt1 => aclInt1,
-      aclInt2 => aclInt2,
-      
-      micData => micData,
-      micClk => micClk,
-      micLRSel => micLRSel,
-
-      ampPWM => ampPWM_internal,
-      ampPWM_l => led(13),
-      ampPWM_r => led(14),
-      ampSD => ampSD,
-      
-      tmpSDA => tmpSDA,
-      tmpSCL => tmpSCL,
-      tmpInt => tmpInt,
-      tmpCT => tmpCT,
-      
-      ps2data =>      ps2data,
-      ps2clock =>     ps2clk,
-
-      pmod_clock => jblo(1),
-      pmod_start_of_sequence => jblo(2),
-      pmod_data_in(1 downto 0) => jblo(4 downto 3),
-      pmod_data_in(3 downto 2) => "00", -- jbhi(8 downto 7),
---      pmod_data_out => jbhi(10 downto 9),
---      pmoda(3 downto 0) => jalo(4 downto 1),
---      pmoda(7 downto 4) => jahi(10 downto 7),
-
-      uart_rx => jclo(1),
-      uart_tx => jclo(2),
-
-      buffereduart_rx => jclo(3),
-      buffereduart_tx => jclo(4),
-      buffereduart2_rx => jchi(9),
-      buffereduart2_tx => jchi(10),
-      buffereduart_ringindicate => jchi(8),
-      
-      slow_access_request_toggle => slow_access_request_toggle,
-      slow_access_ready_toggle => slow_access_ready_toggle,
-      slow_access_address => slow_access_address,
-      slow_access_write => slow_access_write,
-      slow_access_wdata => slow_access_wdata,
-      slow_access_rdata => slow_access_rdata,
---      cpu_exrom => cpu_exrom,      
---      cpu_game => cpu_game,      
-      -- enable/disable cartridge with sw(8)
-      cpu_exrom => '1',
-      cpu_game => '1',
-      cart_access_count => x"00",
-
-      fpga_temperature => fpga_temperature,
-
-      led(12 downto 0) => led(12 downto 0),
-      led(15 downto 13) => dummy,
-      sw => sw,
-      btn => btn,
-
-      UART_TXD => UART_TXD,
-      RsRx => RsRx,
-      
-      sseg_ca => sseg_ca,
-      sseg_an => sseg_an
-      );
-
-    vgared <= buffer_vgablue(7 downto 4);
-    vgagreen <= buffer_vgablue(7 downto 4);
-    vgablue <= buffer_vgablue(7 downto 4);
-  
---  if lcd_panel_enable='1' then
-    jalo <= std_logic_vector(buffer_vgablue(7 downto 4));
-    jahi <= std_logic_vector(buffer_vgared(7 downto 4));
-    jblo <= std_logic_vector(buffer_vgagreen(7 downto 4));
-    jbhi(7) <= lcd_pixel_strobe;
-    jbhi(8) <= lcd_hsync;
-    jbhi(9) <= lcd_vsync;
-    jbhi(10) <= lcd_display_enable;
---  else
---    -- XXX Not bidirectional! Widget board will most likely
---    -- not work with this.
---    pmoda_hi <= jahi(10 downto 7);
---    pmoda_lo <= jalo(4 downto 1);
---  end if;    
-  
-  -- Hardware buttons for triggering IRQ & NMI
-  irq <= not btn(0);
-  nmi <= not btn(4);
-  restore_key <= not btn(1);
-
-  process (cpuclock)
+  -- Update sample value
+  process(ethclock)
+    function get_table_value (table_index: table_index_type) return table_value_type is
+      variable table_value: table_value_type;
+    begin
+      case table_index is
+        when 0 =>
+          table_value := 1;
+        when 1 =>
+          table_value := 2;
+        when 2 =>
+          table_value := 4;
+        when 3 =>
+          table_value := 5;
+        when 4 =>
+          table_value := 7;
+        when 5 =>
+          table_value := 9;
+        when 6 =>
+          table_value := 10;
+        when 7 =>
+          table_value := 12;
+        when 8 =>
+          table_value := 13;
+        when 9 =>
+          table_value := 15;
+        when 10 =>
+          table_value := 16;
+        when 11 =>
+          table_value := 18;
+        when 12 =>
+          table_value := 20;
+        when 13 =>
+          table_value := 21;
+        when 14 =>
+          table_value := 23;
+        when 15 =>
+          table_value := 24;
+        when 16 =>
+          table_value := 26;
+        when 17 =>
+          table_value := 27;
+        when 18 =>
+          table_value := 29;
+        when 19 =>
+          table_value := 30;
+        when 20 =>
+          table_value := 32;
+        when 21 =>
+          table_value := 34;
+        when 22 =>
+          table_value := 35;
+        when 23 =>
+          table_value := 37;
+        when 24 =>
+          table_value := 38;
+        when 25 =>
+          table_value := 40;
+        when 26 =>
+          table_value := 41;
+        when 27 =>
+          table_value := 43;
+        when 28 =>
+          table_value := 44;
+        when 29 =>
+          table_value := 46;
+        when 30 =>
+          table_value := 47;
+        when 31 =>
+          table_value := 49;
+        when 32 =>
+          table_value := 51;
+        when 33 =>
+          table_value := 52;
+        when 34 =>
+          table_value := 54;
+        when 35 =>
+          table_value := 55;
+        when 36 =>
+          table_value := 57;
+        when 37 =>
+          table_value := 58;
+        when 38 =>
+          table_value := 60;
+        when 39 =>
+          table_value := 61;
+        when 40 =>
+          table_value := 63;
+        when 41 =>
+          table_value := 64;
+        when 42 =>
+          table_value := 66;
+        when 43 =>
+          table_value := 67;
+        when 44 =>
+          table_value := 69;
+        when 45 =>
+          table_value := 70;
+        when 46 =>
+          table_value := 72;
+        when 47 =>
+          table_value := 73;
+        when 48 =>
+          table_value := 75;
+        when 49 =>
+          table_value := 76;
+        when 50 =>
+          table_value := 78;
+        when 51 =>
+          table_value := 79;
+        when 52 =>
+          table_value := 81;
+        when 53 =>
+          table_value := 82;
+        when 54 =>
+          table_value := 84;
+        when 55 =>
+          table_value := 85;
+        when 56 =>
+          table_value := 87;
+        when 57 =>
+          table_value := 88;
+        when 58 =>
+          table_value := 90;
+        when 59 =>
+          table_value := 91;
+        when 60 =>
+          table_value := 93;
+        when 61 =>
+          table_value := 94;
+        when 62 =>
+          table_value := 95;
+        when 63 =>
+          table_value := 97;
+        when 64 =>
+          table_value := 98;
+        when 65 =>
+          table_value := 100;
+        when 66 =>
+          table_value := 101;
+        when 67 =>
+          table_value := 103;
+        when 68 =>
+          table_value := 104;
+        when 69 =>
+          table_value := 105;
+        when 70 =>
+          table_value := 107;
+        when 71 =>
+          table_value := 108;
+        when 72 =>
+          table_value := 110;
+        when 73 =>
+          table_value := 111;
+        when 74 =>
+          table_value := 113;
+        when 75 =>
+          table_value := 114;
+        when 76 =>
+          table_value := 115;
+        when 77 =>
+          table_value := 117;
+        when 78 =>
+          table_value := 118;
+        when 79 =>
+          table_value := 120;
+        when 80 =>
+          table_value := 121;
+        when 81 =>
+          table_value := 122;
+        when 82 =>
+          table_value := 124;
+        when 83 =>
+          table_value := 125;
+        when 84 =>
+          table_value := 126;
+        when 85 =>
+          table_value := 128;
+        when 86 =>
+          table_value := 129;
+        when 87 =>
+          table_value := 130;
+        when 88 =>
+          table_value := 132;
+        when 89 =>
+          table_value := 133;
+        when 90 =>
+          table_value := 134;
+        when 91 =>
+          table_value := 136;
+        when 92 =>
+          table_value := 137;
+        when 93 =>
+          table_value := 138;
+        when 94 =>
+          table_value := 140;
+        when 95 =>
+          table_value := 141;
+        when 96 =>
+          table_value := 142;
+        when 97 =>
+          table_value := 144;
+        when 98 =>
+          table_value := 145;
+        when 99 =>
+          table_value := 146;
+        when 100 =>
+          table_value := 147;
+        when 101 =>
+          table_value := 149;
+        when 102 =>
+          table_value := 150;
+        when 103 =>
+          table_value := 151;
+        when 104 =>
+          table_value := 153;
+        when 105 =>
+          table_value := 154;
+        when 106 =>
+          table_value := 155;
+        when 107 =>
+          table_value := 156;
+        when 108 =>
+          table_value := 158;
+        when 109 =>
+          table_value := 159;
+        when 110 =>
+          table_value := 160;
+        when 111 =>
+          table_value := 161;
+        when 112 =>
+          table_value := 162;
+        when 113 =>
+          table_value := 164;
+        when 114 =>
+          table_value := 165;
+        when 115 =>
+          table_value := 166;
+        when 116 =>
+          table_value := 167;
+        when 117 =>
+          table_value := 168;
+        when 118 =>
+          table_value := 170;
+        when 119 =>
+          table_value := 171;
+        when 120 =>
+          table_value := 172;
+        when 121 =>
+          table_value := 173;
+        when 122 =>
+          table_value := 174;
+        when 123 =>
+          table_value := 175;
+        when 124 =>
+          table_value := 176;
+        when 125 =>
+          table_value := 178;
+        when 126 =>
+          table_value := 179;
+        when 127 =>
+          table_value := 180;
+        when 128 =>
+          table_value := 181;
+        when 129 =>
+          table_value := 182;
+        when 130 =>
+          table_value := 183;
+        when 131 =>
+          table_value := 184;
+        when 132 =>
+          table_value := 185;
+        when 133 =>
+          table_value := 186;
+        when 134 =>
+          table_value := 187;
+        when 135 =>
+          table_value := 188;
+        when 136 =>
+          table_value := 189;
+        when 137 =>
+          table_value := 191;
+        when 138 =>
+          table_value := 192;
+        when 139 =>
+          table_value := 193;
+        when 140 =>
+          table_value := 194;
+        when 141 =>
+          table_value := 195;
+        when 142 =>
+          table_value := 196;
+        when 143 =>
+          table_value := 197;
+        when 144 =>
+          table_value := 198;
+        when 145 =>
+          table_value := 199;
+        when 146 =>
+          table_value := 200;
+        when 147 =>
+          table_value := 201;
+        when 148 =>
+          table_value := 202;
+        when 149 =>
+          table_value := 202;
+        when 150 =>
+          table_value := 203;
+        when 151 =>
+          table_value := 204;
+        when 152 =>
+          table_value := 205;
+        when 153 =>
+          table_value := 206;
+        when 154 =>
+          table_value := 207;
+        when 155 =>
+          table_value := 208;
+        when 156 =>
+          table_value := 209;
+        when 157 =>
+          table_value := 210;
+        when 158 =>
+          table_value := 211;
+        when 159 =>
+          table_value := 212;
+        when 160 =>
+          table_value := 212;
+        when 161 =>
+          table_value := 213;
+        when 162 =>
+          table_value := 214;
+        when 163 =>
+          table_value := 215;
+        when 164 =>
+          table_value := 216;
+        when 165 =>
+          table_value := 217;
+        when 166 =>
+          table_value := 218;
+        when 167 =>
+          table_value := 218;
+        when 168 =>
+          table_value := 219;
+        when 169 =>
+          table_value := 220;
+        when 170 =>
+          table_value := 221;
+        when 171 =>
+          table_value := 221;
+        when 172 =>
+          table_value := 222;
+        when 173 =>
+          table_value := 223;
+        when 174 =>
+          table_value := 224;
+        when 175 =>
+          table_value := 225;
+        when 176 =>
+          table_value := 225;
+        when 177 =>
+          table_value := 226;
+        when 178 =>
+          table_value := 227;
+        when 179 =>
+          table_value := 227;
+        when 180 =>
+          table_value := 228;
+        when 181 =>
+          table_value := 229;
+        when 182 =>
+          table_value := 230;
+        when 183 =>
+          table_value := 230;
+        when 184 =>
+          table_value := 231;
+        when 185 =>
+          table_value := 232;
+        when 186 =>
+          table_value := 232;
+        when 187 =>
+          table_value := 233;
+        when 188 =>
+          table_value := 233;
+        when 189 =>
+          table_value := 234;
+        when 190 =>
+          table_value := 235;
+        when 191 =>
+          table_value := 235;
+        when 192 =>
+          table_value := 236;
+        when 193 =>
+          table_value := 236;
+        when 194 =>
+          table_value := 237;
+        when 195 =>
+          table_value := 238;
+        when 196 =>
+          table_value := 238;
+        when 197 =>
+          table_value := 239;
+        when 198 =>
+          table_value := 239;
+        when 199 =>
+          table_value := 240;
+        when 200 =>
+          table_value := 240;
+        when 201 =>
+          table_value := 241;
+        when 202 =>
+          table_value := 241;
+        when 203 =>
+          table_value := 242;
+        when 204 =>
+          table_value := 242;
+        when 205 =>
+          table_value := 243;
+        when 206 =>
+          table_value := 243;
+        when 207 =>
+          table_value := 244;
+        when 208 =>
+          table_value := 244;
+        when 209 =>
+          table_value := 245;
+        when 210 =>
+          table_value := 245;
+        when 211 =>
+          table_value := 246;
+        when 212 =>
+          table_value := 246;
+        when 213 =>
+          table_value := 246;
+        when 214 =>
+          table_value := 247;
+        when 215 =>
+          table_value := 247;
+        when 216 =>
+          table_value := 248;
+        when 217 =>
+          table_value := 248;
+        when 218 =>
+          table_value := 248;
+        when 219 =>
+          table_value := 249;
+        when 220 =>
+          table_value := 249;
+        when 221 =>
+          table_value := 249;
+        when 222 =>
+          table_value := 250;
+        when 223 =>
+          table_value := 250;
+        when 224 =>
+          table_value := 250;
+        when 225 =>
+          table_value := 251;
+        when 226 =>
+          table_value := 251;
+        when 227 =>
+          table_value := 251;
+        when 228 =>
+          table_value := 251;
+        when 229 =>
+          table_value := 252;
+        when 230 =>
+          table_value := 252;
+        when 231 =>
+          table_value := 252;
+        when 232 =>
+          table_value := 252;
+        when 233 =>
+          table_value := 253;
+        when 234 =>
+          table_value := 253;
+        when 235 =>
+          table_value := 253;
+        when 236 =>
+          table_value := 253;
+        when 237 =>
+          table_value := 253;
+        when 238 =>
+          table_value := 254;
+        when 239 =>
+          table_value := 254;
+        when 240 =>
+          table_value := 254;
+        when 241 =>
+          table_value := 254;
+        when 242 =>
+          table_value := 254;
+        when 243 =>
+          table_value := 254;
+        when 244 =>
+          table_value := 254;
+        when 245 =>
+          table_value := 254;
+        when 246 =>
+          table_value := 255;
+        when 247 =>
+          table_value := 255;
+        when 248 =>
+          table_value := 255;
+        when 249 =>
+          table_value := 255;
+        when 250 =>
+          table_value := 255;
+        when 251 =>
+          table_value := 255;
+        when 252 =>
+          table_value := 255;
+        when 253 =>
+          table_value := 255;
+        when 254 =>
+          table_value := 255;
+        when 255 =>
+          table_value := 255;
+      end case;
+      return table_value;
+    end;
+    
   begin
-    if rising_edge(cpuclock) then
-      -- Debug audio output
-      if sw(7) = '0' then
-        ampPWM <= ampPWM_internal;
-        led(15) <= ampPWM_internal;
+    if rising_edge(ethclock) then
+      i2s_master_clk <= i2s_master_clk_int;
+      i2s_sync <= i2s_sync_int;      
+      
+      if divisor /= 0 then
+        divisor <= divisor - 1;
       else
-        -- 1KHz sawtooth
-        if sawtooth_phase < 50000 then
-          sawtooth_phase <= sawtooth_phase + 1;
-          if sawtooth_counter < 256 then
-            sawtooth_counter <= sawtooth_counter + sawtooth_level;
-            ampPWM <= '0';
-            led(15) <= '0';
+        divisor <= divisor_max;
+        if table_dir='1' then
+          if table_offset /= 255 then
+            table_offset <= table_offset + 1;
           else
-            sawtooth_counter <= sawtooth_counter + sawtooth_level - 256;
-            ampPWM <= '1';
-            led(15) <= '1';
+            table_dir <= '0';
           end if;
         else
-          sawtooth_phase <= 0;
-          if sawtooth_level < 255 then
-            sawtooth_level <= sawtooth_level + 1;
+          if table_offset /= 0 then
+            table_offset <= table_offset - 1;
           else
-            sawtooth_level <= 0;
+            table_dir <= '1';
+            table_neg <= not table_neg;
+            led <= not led;
           end if;
         end if;
       end if;
+      if sample = x"fFFF" then
+        sample <= x"0000";
+      else
+        sample <= sample(14 downto 0)&'1';
+      end if;
+--      sample <= to_unsigned(get_table_value(table_offset)*256,16);
     end if;
   end process;
-
-  -- Ethernet clock is now just the CPU clock, since both are on 50MHz
-  eth_clock <= cpuclock;
+  
   
 end Behavioral;

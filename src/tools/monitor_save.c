@@ -53,6 +53,7 @@ unsigned long long gettime_ms(void);
 
 unsigned long long last_check;
 
+int end_addr_c65=0;
 
 int process_char(unsigned char c,int live);
 
@@ -62,7 +63,7 @@ int slow_write(int fd,char *d,int l)
   // characters back, meaning we need a 1 char gap between successive
   // characters.  This means >=1/23040sec delay. We'll allow roughly
   // double that at 100usec.
-  //  printf("Writing [%s]\n",d);
+  //   printf("Writing [%s]\n",d);
   int i;
   for(i=0;i<l;i++)
     {
@@ -84,6 +85,7 @@ char *filename=NULL;
 FILE *f=NULL;
 char serial_port[1024]="/dev/ttyUSB1"; // XXX do a better job auto-detecting this
 int serial_speed=2000000;
+char last_mem_request[128]={0};
 
 
 
@@ -101,6 +103,8 @@ int process_line(char *line,int live)
   int pc,a,x,y,sp,p;
   // printf("[%s]\n",line);
   if (!live) return 0;
+  // Notice when we have requested a memory block, so we can stop suppressing duplicate requests
+  if (!strcmp(last_mem_request,line)) last_mem_request[0]=0;
   if (sscanf(line,"%04x %02x %02x %02x %02x %02x",
 	     &pc,&a,&x,&y,&sp,&p)==6) {
     // printf("PC=$%04x\n",pc);
@@ -119,6 +123,9 @@ int process_line(char *line,int live)
 	usleep(20000);
 	// Save memory pointed to by BASIC, unless we have been given an address range
 	if (start_addr==-1) {
+	  usleep(20000);
+	  slow_write(fd,"m82\r",4); // and ask for C65 BASIC end of text pointer
+	  usleep(100000);
 	  slow_write(fd,"m2b\r",4); // and ask for BASIC memory pointers
 	  usleep(20000);
 	} else state=1;
@@ -132,6 +139,39 @@ int process_line(char *line,int live)
 	       &bs_low,&bs_high,&be_low,&be_high)==4) {
       start_addr=bs_low+(bs_high<<8);
       end_addr=be_low+(be_high<<8)-1;
+      if (!start_addr) {
+	printf("Using C65 BASIC pointers\n");
+	// Probably C65 mode
+	start_addr=end_addr;
+	if (start_addr==0x2000) start_addr=0x2001;
+	end_addr=end_addr_c65;
+	// Need to get end_addr from $82
+      }
+      
+      fprintf(stderr,"BASIC program occupies $%04x -- $%04x\n",
+	      start_addr,end_addr);
+      // C64 BASIC header
+      fputc(start_addr&0xff,o); fputc((start_addr>>8)&0xff,o);      
+      state=1;
+    }
+    unsigned int foo;
+    if (sscanf(line,":0000002B:%08x",
+	       &foo)==1) {      
+      start_addr=((foo>>24)&0xff)+((foo>>8)&0xff00);
+      end_addr=((foo>>8)&0xff) + ((foo<<8)&0xff00) -1;
+
+      if (!start_addr) {
+	printf("Using C65 BASIC pointers\n");
+	// Probably C65 mode
+	start_addr=end_addr;
+	if (start_addr==0x2000) start_addr=0x2001;
+	end_addr=end_addr_c65;
+	// Need to get end_addr from $82
+      }
+      
+      fprintf(stderr,"BASIC program occupies $%04x -- $%04x\n",
+	      start_addr,end_addr);
+
       fprintf(stderr,"BASIC program occupies $%04x -- $%04x\n",
 	      start_addr,end_addr);
       // C64 BASIC header
@@ -142,15 +182,48 @@ int process_line(char *line,int live)
   {
     int addr;
     int b[16];
-    if (sscanf(line," :%x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x",
-	       &addr,
-	       &b[0],&b[1],&b[2],&b[3],
-	       &b[4],&b[5],&b[6],&b[7],
-	       &b[8],&b[9],&b[10],&b[11],
-	       &b[12],&b[13],&b[14],&b[15])==17) {
-      char fname[17];
+    char hex[128];
+    if (sscanf(line,":%x:%s",&addr,hex)==2) {
       // printf("Read memory @ $%04x\n",addr);
+      if (addr==start_addr) {
+      for(int i=0;i<16&&(start_addr+i)<=end_addr;i++) 
+      { 
+	char hex_in[3];
+        hex_in[0]=hex[i*2+0];
+        hex_in[1]=hex[i*2+1];
+	hex_in[2]=0;
+	int b=strtoll(hex_in,NULL,16); 
+	fputc(b,o);
+      }
+      start_addr+=0x10;
+      if (start_addr>end_addr) {
+	  // All done
+	  fprintf(stderr,"[T+%lldsec] Finished saving $%04x -- $%04x.\n",
+		  (long long)time(0)-start_time,start_addr,end_addr);
+	  fclose(o);
+	  exit(0);
+	}
+      }
+    }
+    if ((sscanf(line," :%x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x",
+		&addr,
+		&b[0],&b[1],&b[2],&b[3],
+		&b[4],&b[5],&b[6],&b[7],
+		&b[8],&b[9],&b[10],&b[11],
+		&b[12],&b[13],&b[14],&b[15])==17)
+	||(sscanf(line,":%x:%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
+		  &addr,
+		  &b[0],&b[1],&b[2],&b[3],
+		  &b[4],&b[5],&b[6],&b[7],
+		  &b[8],&b[9],&b[10],&b[11],
+		  &b[12],&b[13],&b[14],&b[15])==17))
+ {
+   // printf("Read memory @ $%04x\n",addr);
       last_check=gettime_ms()+50;
+      if (addr==0x82) {
+	end_addr_c65=b[0]+(b[1]<<8);
+	printf("C65 end address = $%04X\n",end_addr_c65);
+      }
       if (addr==start_addr) {
 	for(int i=0;i<16&&(start_addr+i)<=end_addr;i++) fputc(b[i],o);
 	start_addr+=0x10;
@@ -175,9 +248,11 @@ int process_char(unsigned char c, int live)
 {
   // printf("char $%02x\n",c);
   if ((!line_len)&&(c=='.')) {
-    if (state==1) {
+    if ((state==1)&&(!last_mem_request[0])) {
       char cmd[1024];
-      snprintf(cmd,1024,"M%x\r",start_addr);
+      snprintf(cmd,1024,"M%X\r",start_addr);
+      snprintf(last_mem_request,128,".M%X",start_addr);
+      printf("Requesting for memory at $%x\n",start_addr);
       slow_write(fd,cmd,strlen(cmd));
     }
   }
@@ -285,8 +360,6 @@ int main(int argc,char **argv)
                  INPCK | ISTRIP | IXON | IXOFF | IXANY | PARMRK);
   t.c_oflag &= ~OPOST;
   if (tcsetattr(fd, TCSANOW, &t)) perror("Failed to set terminal parameters");
-
-  int phase=0;
 
   while(1)
     {

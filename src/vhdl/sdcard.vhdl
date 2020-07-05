@@ -132,7 +132,9 @@ package SdCardPckg is
       reset_i    : in  std_logic                     := '0';  -- active-high, synchronous  reset.
       rd_i       : in  std_logic                     := '0';  -- active-high read block request.
       wr_i       : in  std_logic                     := '0';  -- active-high write block request.
-      continue_i : in  std_logic                     := '0';  -- If true, inc address and continue R/W.
+      write_multi : in std_logic                     := '0';  -- for all but last block of multi-block write
+      write_multi_first : in std_logic               := '0';  -- for first block of multi-block write
+      write_multi_last : in std_logic                := '0';  -- for last block of multi-block write
       addr_i     : in  std_logic_vector(31 downto 0) := x"00000000";  -- Block address.
       data_i     : in  std_logic_vector(7 downto 0)  := x"00";  -- Data to write to block.
 
@@ -140,7 +142,9 @@ package SdCardPckg is
       hndShk_i   : in  std_logic;  -- High when host has data to give or has taken data.
       hndShk_o   : out std_logic;  -- High when controller has taken data or has data to give.
       error_o    : out std_logic_vector(15 downto 0) := (others => '0');
-      last_state_o : out unsigned(7 downto 0) := x"00"; 
+      last_state_o : out unsigned(7 downto 0) := x"00";
+      last_sd_rxbyte : out unsigned(7 downto 0) := x"DD";
+      clear_error : in std_logic := '0';
       -- I/O signals to the external SD card.
       cs_bo      : out std_logic                     := '1';  -- Active-low chip-select.
       sclk_o     : out std_logic                     := '0';  -- Serial clock to SD card.
@@ -176,7 +180,9 @@ entity SdCardCtrl is
     reset_i    : in  std_logic                     := '0';  -- active-high, synchronous  reset.
     rd_i       : in  std_logic                     := '0';  -- active-high read block request.
     wr_i       : in  std_logic                     := '0';  -- active-high write block request.
-    continue_i : in  std_logic                     := '0';  -- If true, inc address and continue R/W.
+    write_multi : in std_logic                     := '0';  -- for all but last block of multi-block write
+    write_multi_first : in std_logic               := '0';  -- for first block of multi-block write
+    write_multi_last : in std_logic                := '0';  -- for last block of multi-block write
     addr_i     : in  std_logic_vector(31 downto 0) := x"00000000";  -- Block address.
     data_i     : in  std_logic_vector(7 downto 0)  := x"00";  -- Data to write to block.
     data_o     : out std_logic_vector(7 downto 0)  := x"00";  -- Data read from block.
@@ -185,6 +191,8 @@ entity SdCardCtrl is
     hndShk_o   : out std_logic;  -- High when controller has taken data or has data to give.
     error_o    : out std_logic_vector(15 downto 0) := (others => '0');
     last_state_o : out unsigned(7 downto 0) := x"00"; 
+    last_sd_rxbyte : out unsigned(7 downto 0) := x"DD";
+    clear_error : in std_logic := '0';
     -- I/O signals to the external SD card.
     cs_bo      : out std_logic                     := '1';  -- Active-low chip-select.
     sclk_o     : out std_logic                     := '0';  -- Serial clock to SD card.
@@ -264,6 +272,8 @@ begin
     constant CMD41_C         : Cmd_t := std_logic_vector(to_unsigned(16#40# + 41, Cmd_t'length));
     constant READ_BLK_CMD_C  : Cmd_t := std_logic_vector(to_unsigned(16#40# + 17, Cmd_t'length));
     constant WRITE_BLK_CMD_C : Cmd_t := std_logic_vector(to_unsigned(16#40# + 24, Cmd_t'length));
+    constant WRITE_MULTI_BLK_CMD_C : Cmd_t := std_logic_vector(to_unsigned(16#40# + 25, Cmd_t'length));
+    constant FLUSH_CACHE_CMD_C : Cmd_t := std_logic_vector(to_unsigned(16#40# + 23, Cmd_t'length));
 
     -- Except for CMD0 and CMD8, SD card ops don't need a CRC, so use a fake one for that slot in the command.
     constant FAKE_CRC_C : std_logic_vector(7 downto 0) := x"FF";
@@ -287,6 +297,8 @@ begin
     subtype Token_t is std_logic_vector(rx_v'range);
     constant NO_TOKEN_C         : Token_t    := x"FF";  -- Received before the SD card responds to a block read command.
     constant START_TOKEN_C      : Token_t    := x"FE";  -- Starting byte preceding a data block.
+    constant START_TOKEN_MULTI_C      : Token_t    := x"FC";  -- Starting byte preceding a data block.
+    constant START_TOKEN_MULTIEND_C      : Token_t    := x"FD";  -- Byte that tells SD card we are done with mult-sector write
 
     -- Flags that are set/cleared to affect the operation of the FSM.
     variable getCmdResponse_v : boolean;  -- When true, get R1 response to command sent to SD card.
@@ -419,42 +431,44 @@ begin
           when WAIT_FOR_HOST_RW =>  -- Wait for the host to read or write a block of data from the SD card.
             clkDivider_v     := SCLK_PHASE_PERIOD_C - 1;  -- Set SPI clock frequency for normal operation.
             getCmdResponse_v := true;  -- Get R1 response to any commands issued to the SD card.
-            if rd_i = '1' then  -- send READ command and address to the SD card.
+            if rd_i = '1' and wr_i = '1' then
+              -- Flush cache
+              addr_v  := unsigned(addr_i);  -- Store address for multi-block operations.
+              bitCnt_v   := txCmd_v'length;  -- Set bit counter to the size of the command.
+              txCmd_v := FLUSH_CACHE_CMD_C & addr_i & FAKE_CRC_C;  -- Use address supplied by host.
+              state_v := START_TX;
+              rtnState_v := WAIT_FOR_HOST_RW;
+            elsif rd_i = '1' then  -- send READ command and address to the SD card.
               cs_bo <= '0';              -- Enable the SD card.
-              if continue_i = '1' then  -- Multi-block read. Use stored address.
-                if CARD_TYPE_G = SD_CARD_E then  -- SD cards use byte-addressing, 
-                  addr_v := addr_v + BLOCK_SIZE_G;  -- so add block-size to get next block address.
-                else                    -- SDHC cards use block-addressing,
-                  addr_v := addr_v + 1;  -- so just increment current block address.
-                end if;
-                txCmd_v := READ_BLK_CMD_C & std_logic_vector(addr_v) & FAKE_CRC_C;
-              else                      -- Single-block read.
-                txCmd_v := READ_BLK_CMD_C & addr_i & FAKE_CRC_C;  -- Use address supplied by host.
-                addr_v  := unsigned(addr_i);  -- Store address for multi-block operations.
-              end if;
+              txCmd_v := READ_BLK_CMD_C & addr_i & FAKE_CRC_C;  -- Use address supplied by host.
+              addr_v  := unsigned(addr_i);  -- Store address for multi-block operations.
               bitCnt_v   := txCmd_v'length;  -- Set bit counter to the size of the command.
               byteCnt_v  := RD_BLK_SZ_C;
               state_v    := START_TX;  -- Go to FSM subroutine to send the command.
               rtnState_v := RD_BLK;  -- Then go to this state to read the data block.
             elsif wr_i = '1' then  -- send WRITE command and address to the SD card.
               cs_bo <= '0';              -- Enable the SD card.
-              if continue_i = '1' then  -- Multi-block write. Use stored address.
-                if CARD_TYPE_G = SD_CARD_E then  -- SD cards use byte-addressing, 
-                  addr_v := addr_v + BLOCK_SIZE_G;  -- so add block-size to get next block address.
-                else                    -- SDHC cards use block-addressing,
-                  addr_v := addr_v + 1;  -- so just increment current block address.
-                end if;
-                txCmd_v := WRITE_BLK_CMD_C & std_logic_vector(addr_v) & FAKE_CRC_C;
-              else                      -- Single-block write.
+              if write_multi = '0' then
+                -- Normal CMD24 write
                 txCmd_v := WRITE_BLK_CMD_C & addr_i & FAKE_CRC_C;  -- Use address supplied by host.
-                addr_v  := unsigned(addr_i);  -- Store address for multi-block operations.
+                state_v    := START_TX;  -- Go to this FSM subroutine to send the command ...
+                rtnState_v := WR_BLK;  -- then go to this state to write the data block.
+              elsif write_multi = '1' and write_multi_first='1' then
+                -- First block of multi-block write
+                -- We should begin things with CMD25 instead of CMD24, but
+                -- then we don't need to repeat it for each extra block
+                txCmd_v := WRITE_MULTI_BLK_CMD_C & addr_i & FAKE_CRC_C;  -- Use address supplied by host.
+                state_v    := START_TX;  -- Go to this FSM subroutine to send the command ...
+                rtnState_v := WR_BLK;  -- then go to this state to write the data block.
+              else
+                -- We are in a multi-block write.  So just go direct to WR_BLK
+                state_v    := WR_BLK;       -- Go to this FSM subroutine to send the command ...                
               end if;
+              addr_v  := unsigned(addr_i);  -- Store address for multi-block operations.
               bitCnt_v   := txCmd_v'length;  -- Set bit counter to the size of the command.
               byteCnt_v  := WR_BLK_SZ_C;    -- Set number of bytes to write.
-              state_v    := START_TX;  -- Go to this FSM subroutine to send the command ...
-              rtnState_v := WR_BLK;  -- then go to this state to write the data block.
-            else              -- Do nothing and wait for command from host.
-              cs_bo   <= '1';            -- Deselect the SD card.
+            else
+--              cs_bo   <= '1';            -- Deselect the SD card.
               busy_o  <= '0';  -- SD card interface is waiting for R/W from host, so it's not busy.
               state_v := WAIT_FOR_HOST_RW;  -- Keep waiting for command from host.
             end if;
@@ -499,7 +513,18 @@ begin
             if byteCnt_v = WR_BLK_SZ_C then
               txData_v := NO_TOKEN_C;  -- Hold MOSI high for one byte before data block goes out.
             elsif byteCnt_v = WR_BLK_SZ_C - 1 then     -- Send start token.
-              txData_v := START_TOKEN_C;   -- Starting token for data block.
+              if write_multi = '0' then
+                txData_v := START_TOKEN_C;   -- Starting token for data block.
+              elsif write_multi_last = '1' then
+                txData_v := START_TOKEN_MULTIEND_C;   -- End of write token (we
+                                                      -- ignore the data that follows)
+              else
+                txData_v := START_TOKEN_MULTI_C;   -- Starting token for all
+                                                   -- but last block of
+                                                   -- mult-sector write.
+              end if;
+
+                
             elsif byteCnt_v >= 4 then   -- Now send bytes in the data block.
               hndShk_r <= '1';           -- Signal host to provide data.
             -- The transmit shift register is loaded with data from host in the handshaking section above.
@@ -569,7 +594,13 @@ begin
             end if;
             sclk_r           <= not sclk_r;    -- Toggle the SPI clock...
             sclkPhaseTimer_v := clkDivider_v;  -- and set the duration of the next clock phase.
-
+            if clear_error = '1' then
+              sclk_r     <= '0';
+              bitCnt_v   := 2;
+              state_v    := DESELECT;
+              rtnState_v := WAIT_FOR_HOST_RW;
+            end if;
+            
           when RX_BITS =>               -- Receive bits from the SD card.
             if sclk_r = '1' then    -- Bits enter after the rising edge of SCLK.
               rx_v := rx_v(rx_v'high-1 downto 0) & miso_i;
@@ -585,6 +616,7 @@ begin
                   state_v  := DESELECT;  -- De-select SD card before returning.
                 else
                   state_v := rtnState_v;  -- Otherwise, return to calling state without de-selecting.
+                  last_sd_rxbyte <= unsigned(rx_v);
                 end if;
               end if;
             end if;
@@ -593,7 +625,10 @@ begin
             
           when DESELECT =>  -- De-select the SD card and send some clock pulses (Must enter with sclk at zero.)
             doDeselect_v     := false;  -- Once the de-select is done, clear the flag that caused it.
-            cs_bo            <= '1';     -- De-select the SD card.
+--            cs_bo            <= '1';     -- De-select the SD card.
+            -- PGS XXX Make it controllable whether we deselect card when done
+            -- or not.
+            cs_bo <= clear_error;
             mosi_o           <= '1';  -- Keep the data input of the SD card pulled high.
             state_v          := PULSE_SCLK;  -- Pulse the clock so the SD card will see the de-select.
             sclk_r           <= '0';  -- Clock is set low so the next rising edge will see the new CS and MOSI
@@ -614,6 +649,12 @@ begin
             error_o(rx_v'range) <= rx_v;  -- Output the SD card response as the error code.
             busy_o              <= '0';  -- Not busy.
 
+            if clear_error='1' then
+              sclk_r     <= '0';
+              bitCnt_v   := 2;
+              state_v    := DESELECT;
+              rtnState_v := WAIT_FOR_HOST_RW;
+            end if;
           when others =>
             state_v := START_INIT;
         end case;

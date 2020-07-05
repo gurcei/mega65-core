@@ -35,6 +35,7 @@ entity sprite is
     signal sprite_number : in spritenumber;
 
     signal sprite_h640 : in std_logic;
+    signal sprite_v400 : in std_logic;
 
     signal sprite_sixteen_colour_mode : in std_logic;
     
@@ -70,13 +71,16 @@ entity sprite is
     -- and what is the colour of the bitmap pixel?
     signal x320_in : in xposition;
     signal x640_in : in xposition;
+    signal pipeline_delay : integer range 0 to 31;
     signal y_in : in yposition;
+    signal yfine_in : in yposition;
     signal border_in : in std_logic;
     signal pixel_in : in unsigned(7 downto 0);
     signal alpha_in : in unsigned(7 downto 0);
     -- and information from the previous sprite
     signal is_sprite_in : in std_logic;
     signal sprite_colour_in : in unsigned(7 downto 0);
+    signal sprite_number_in : in integer range 0 to 7;
     signal sprite_map_in : in std_logic_vector(7 downto 0);
     signal sprite_fg_map_in : in std_logic_vector(7 downto 0);
 
@@ -86,17 +90,19 @@ entity sprite is
     signal x320_out : out xposition;
     signal x640_out : out xposition;
     signal y_out : out yposition;
+    signal yfine_out : out yposition;
     signal border_out : out std_logic;
-    signal pixel_out : out unsigned(7 downto 0);
-    signal alpha_out : out unsigned(7 downto 0);
+    signal pixel_out : out unsigned(7 downto 0) := x"00";
+    signal alpha_out : out unsigned(7 downto 0) := x"00";
     signal sprite_colour_out : out unsigned(7 downto 0);
+    signal sprite_number_out : out integer range 0 to 7;
     signal is_sprite_out : out std_logic;
     signal sprite_map_out : out std_logic_vector(7 downto 0);
     signal sprite_fg_map_out : out std_logic_vector(7 downto 0);
     
     signal sprite_enable : in std_logic;
     signal sprite_x : in unsigned(9 downto 0);
-    signal sprite_y : in unsigned(7 downto 0);
+    signal sprite_y : in unsigned(9 downto 0);
     signal sprite_colour : in unsigned(7 downto 0);
     signal sprite_multi0_colour : in unsigned(7 downto 0);
     signal sprite_multi1_colour : in unsigned(7 downto 0);
@@ -118,18 +124,20 @@ architecture behavioural of sprite is
   signal y_offset : integer range 0 to 255 := 0;
   signal x_offset : integer range 0 to 64 := 0;
   signal x_in_sprite : std_logic := '0';
+  signal x_in_sprite_soon : std_logic := '0';
   signal sprite_drawing : std_logic := '0';
   signal x_expand_toggle : std_logic := '0';
   signal y_expand_toggle : std_logic := '0';
-  signal sprite_pixel_bits_mono : std_logic_vector(127 downto 0) := (others => '1');
-  signal sprite_pixel_bits_mc : std_logic_vector(127 downto 0) := (others => '1');
-  signal sprite_pixel_bits : std_logic_vector(127 downto 0) := (others => '1');
-  signal sprite_pixel_bits_last : std_logic_vector(127 downto 0) := (others => '1');
+  signal sprite_pixel_bits : std_logic_vector(63 downto 0) := (others => '1');
+  signal sprite_pixel_bits_last : std_logic_vector(63 downto 0) := (others => '1'); -- is this maybe just redundant wrt. sprite_data_64bits?
   signal sprite_data_64bits : unsigned(63 downto 0) := (others => '0');
   signal check_collisions : std_logic := '0';
 
   signal x_in : xposition := 0;
 
+  signal pixel_strobe : std_logic := '0';
+  signal pixel_strobe_history : std_logic_vector(31 downto 0) := (others => '0');
+  
 begin  -- behavioural
   
   -- purpose: sprite drawing
@@ -139,12 +147,23 @@ begin  -- behavioural
   main: process (pixelclock,sprite_number,sprite_h640,x640_in,x320_in)
     variable sprite_number_mod_4 : integer range 0 to 7 := (sprite_number mod 4) * 2;
     variable pixel_16 : std_logic_vector(3 downto 0);
+    variable sprite_color2_bits  : std_logic_vector(1 downto 0);
+    variable sprite_color16_bits : std_logic_vector(3 downto 0);
+    variable x_offset_bit_0 : std_logic;
+    variable x_offset_bits : std_logic_vector(5 downto 0);
+    
   begin  -- process main
     if sprite_h640='1' then
       x_in <= x640_in;
+--      report "x_in <= x640_in";
     else
       x_in <= x320_in;
+--      report "x_in <= x320_in";
     end if;
+    
+    x_offset_bits := std_logic_vector(to_unsigned(x_offset,6));
+    x_offset_bit_0 := x_offset_bits(0);
+    
     if pixelclock'event and pixelclock = '1' then  -- rising clock edge
 --      report "SPRITE: entering VIC-II sprite #" & integer'image(sprite_number);
       -- copy sprite data chain from input side to output side      
@@ -154,8 +173,30 @@ begin  -- behavioural
       sprite_data_out <= sprite_data_in;
       sprite_number_for_data_out <= sprite_number_for_data_in;
 
-      y_last <= y_in;
+      sprite_color2_bits(1) := sprite_pixel_bits(63);
+      if sprite_is_multicolour = '1' then
+        sprite_color2_bits(0) := sprite_pixel_bits(62);
+      else
+        sprite_color2_bits(0) := '0';
+      end if;
+      
+      sprite_color16_bits := sprite_pixel_bits(63 downto 60);
+
+      if sprite_v400 = '1' then
+        y_last <= yfine_in;
+      else
+        y_last <= y_in;
+      end if;
       x_last <= x_in;
+
+      if (x_last /= x_in) then
+        pixel_strobe_history(0) <= '1';
+      else
+        pixel_strobe_history(0) <= '0';
+      end if;
+      pixel_strobe_history(31 downto 1) <= pixel_strobe_history(30 downto 0);
+      pixel_strobe <= pixel_strobe_history(pipeline_delay);
+
       
       if sprite_datavalid_in='1' then
         report "SPRITE: fetching sprite #"
@@ -185,22 +226,6 @@ begin  -- behavioural
         end case;
       end if;
 
-      -- Every cycle update mono and multi-colour bit expansion of sprite
-      for i in 0 to 63 loop
-        -- mono version just copies the bits stretching each bit to two to
-        -- select the foreground colour.
-        sprite_pixel_bits_mono(i*2) <= '0';
-        sprite_pixel_bits_mono(i*2+1) <= sprite_data_64bits(i);
-      end loop;
-      for i in 0 to 31 loop
-        -- multi-colour version copies the bit pair twice to stretch the colour
-        -- over two pixels.
-        sprite_pixel_bits_mc(i*4) <= sprite_data_64bits(i*2);
-        sprite_pixel_bits_mc(i*4+1) <= sprite_data_64bits(i*2+1);
-        sprite_pixel_bits_mc(i*4+2) <= sprite_data_64bits(i*2);
-        sprite_pixel_bits_mc(i*4+3) <= sprite_data_64bits(i*2+1);
-      end loop;
-      
       if sprite_number_for_data_in = sprite_number then
         -- Tell VIC-IV our current sprite data offset
         sprite_data_offset_out <= sprite_data_offset;
@@ -213,6 +238,7 @@ begin  -- behavioural
       x320_out <= x320_in;
       x640_out <= x640_in;
       y_out <= y_in;
+      yfine_out <= yfine_in;
       border_out <= border_in;
       is_foreground_out <= is_foreground_in;
       is_background_out <= is_background_in;
@@ -236,23 +262,19 @@ begin  -- behavioural
           sprite_data_offset <= 8 + (y_offset * 8);
         end if;
       end if;
-      if (y_in = sprite_y) then
+      if ((y_in = sprite_y) and (sprite_v400='0'))
+         or ((yfine_in = sprite_y) and (sprite_v400='1')) then
         if y_top='0' then
           report "SPRITE: y_top set";
         end if;
         y_top <= '1';
         check_collisions <= '1';
-        if y_last /= y_in then
+        if ((sprite_v400='0') and (y_last /= y_in))
+          or ((sprite_v400='1') and (y_last /= yfine_in))
+        then
+          sprite_pixel_bits <= std_logic_vector(sprite_data_64bits);
+          sprite_pixel_bits_last <= std_logic_vector(sprite_data_64bits);
           report "sprite_pixel_bits (from _mc/_mono)";
-          if sprite_is_multicolour = '1' then
-            report "SPRITE: sprite_pixel_bits{,_last} <= bits_mc";
-            sprite_pixel_bits <= sprite_pixel_bits_mc;
-            sprite_pixel_bits_last <= sprite_pixel_bits_mc;
-          else
-            report "SPRITE: sprite_pixel_bits{,_last} <= bits_mono";
-            sprite_pixel_bits <= sprite_pixel_bits_mono;
-            sprite_pixel_bits_last <= sprite_pixel_bits_mono;
-          end if;
         end if;
         if y_top='0' then
           y_offset <= 0;
@@ -264,25 +286,33 @@ begin  -- behavioural
         end if;
         y_top <= '0';
       end if;
-      report "SPRITE: #" & integer'image(sprite_number) & ": "
-        & "x_in=" & integer'image(x_in)
-        & ", y_in=" & integer'image(y_in)
---        & ", y_top=" & std_logic'image(y_top)
-        & ", enable=" & std_logic'image(sprite_enable)
-        & ", drawing=" & std_logic'image(sprite_drawing)
-        & ", in_sprite=" & std_logic'image(x_in_sprite)
-        & ", sprite_x,y=" & to_hstring("000"&sprite_x) & "," &
-        to_hstring(sprite_y);
+--      report "SPRITE: #" & integer'image(sprite_number) & ": "
+--        & "x_in=" & integer'image(x_in)
+--        & ", y_in=" & integer'image(y_in)
+----        & ", y_top=" & std_logic'image(y_top)
+--        & ", enable=" & std_logic'image(sprite_enable)
+--        & ", drawing=" & std_logic'image(sprite_drawing)
+--        & ", in_sprite=" & std_logic'image(x_in_sprite)
+--        & ", sprite_x,y=" & to_hstring("000"&sprite_x) & "," &
+--        to_hstring(sprite_y);
 --      if (x_in = to_integer(sprite_x)) then
 --        report "x_in = sprite_x";
 --      else
 --        report "x_in = " & integer'image(x_in) & ", != sprite_x = " & integer'image(to_integer(sprite_x));
 --      end if;
+
+      -- Make sure we don't start a sprite edge except on an output pixel edge,
+      -- to stop the left pixel column being trimmed by one clock tick
+      if (x_in_sprite_soon= '1') and (pixel_strobe = '1')  then
+        x_in_sprite_soon <= '0';
+        x_in_sprite <= '1';
+      end if;
+
       if (x_in = to_integer(sprite_x))
         and (x_in /= x_last)
         and (sprite_enable='1')
         and ((y_top='1') or (sprite_drawing = '1')) then
-        x_in_sprite <= '1';
+        x_in_sprite_soon <= '1';
         x_expand_toggle <= '0';
         report "SPRITE: drawing row " & integer'image(y_offset)
           & " of sprite " & integer'image(sprite_number)
@@ -301,8 +331,14 @@ begin  -- behavioural
         end if;
       end if;
       -- Advance Y position of sprite
-      if y_last /= y_in then
-        y_last <= y_in;
+      if ((sprite_v400='0') and (y_last /= y_in))
+        or ((sprite_v400='1') and (y_last /= yfine_in)) then
+        report "stop drawing to to y_in advance to " & integer'image(y_in);
+        if sprite_v400='0' then
+          y_last <= y_in;
+        else
+          y_last <= yfine_in;
+        end if;
         x_in_sprite <= '0';
         if (sprite_drawing = '1') or (y_top='1') then
           -- Check collisions whenever we start a new logical sprite pixel row, even
@@ -326,15 +362,8 @@ begin  -- behavioural
               & ", old y_offset=" & integer'image(y_offset);
 
             report "sprite_pixel_bits (from _mc/_mono)";
-            if sprite_is_multicolour = '1' then
-              report "SPRITE: sprite_pixel_bits{,_last} <= bits_mc";
-              sprite_pixel_bits <= sprite_pixel_bits_mc;
-              sprite_pixel_bits_last <= sprite_pixel_bits_mc;
-            else
-              report "SPRITE: sprite_pixel_bits{,_last} <= bits_mono";
-              sprite_pixel_bits <= sprite_pixel_bits_mono;
-              sprite_pixel_bits_last <= sprite_pixel_bits_mono;
-            end if;
+            sprite_pixel_bits <= std_logic_vector(sprite_data_64bits);
+            sprite_pixel_bits_last <= std_logic_vector(sprite_data_64bits);
           else
             report "sprite_pixel_bits (from _last)";
             sprite_pixel_bits <= sprite_pixel_bits_last;
@@ -360,15 +389,30 @@ begin  -- behavioural
       end if;
       
       -- Advance X position of sprite
-      if (x_last /= x_in) and (x_in_sprite = '1') then
+      if (pixel_strobe='1') and (x_in_sprite = '1') then
         -- X position has advanced while drawing a sprite
         report "SPRITE: drawing next pixel";
         if (x_expand_toggle = '1') or (sprite_stretch_x/='1') then
-          if (
-              ((x_offset = 23) and (sprite_extended_width_enable='0'))
-              or ((x_offset = 63) and (sprite_extended_width_enable='1'))
+          if
+            (
+              
+            ((sprite_stretch_x='1') and
+            (
+              ((x_offset = (23)) and (sprite_extended_width_enable='0'))
+              or ((x_offset = (63)) and (sprite_extended_width_enable='1'))
               -- 16 colour sprites are always 16 pixels wide
-              or ((x_offset = 15) and (sprite_sixteen_colour_mode='1')))            
+              or ((x_offset = (15)) and (sprite_sixteen_colour_mode='1'))))
+
+            or
+            
+            ((sprite_stretch_x='0') and
+            (
+              ((x_offset = (23)) and (sprite_extended_width_enable='0'))
+              or ((x_offset = (63)) and (sprite_extended_width_enable='1'))
+              -- 16 colour sprites are always 16 pixels wide
+              or ((x_offset = (15)) and (sprite_sixteen_colour_mode='1'))))
+            )
+            
             and (sprite_horizontal_tile_enable='0')
           then
             report "SPRITE: right edge of sprite encountered. stopping drawing.";
@@ -391,9 +435,11 @@ begin  -- behavioural
             &")";
 --          report "sprite_pixel_bits (rotate)";
           if sprite_sixteen_colour_mode = '1' then
-            sprite_pixel_bits <= sprite_pixel_bits(119 downto 0)&sprite_pixel_bits(127 downto 120);
-          else
-            sprite_pixel_bits <= sprite_pixel_bits(125 downto 0)&sprite_pixel_bits(127 downto 126);            
+            sprite_pixel_bits <= sprite_pixel_bits(59 downto 0)&sprite_pixel_bits(63 downto 60);
+          elsif sprite_is_multicolour = '0' then
+            sprite_pixel_bits <= sprite_pixel_bits(62 downto 0)&sprite_pixel_bits(63);            
+          elsif x_offset_bit_0 = '1' then 
+            sprite_pixel_bits <= sprite_pixel_bits(61 downto 0)&sprite_pixel_bits(63 downto 62);            
           end if;
         end if;
         report "SPRITE: toggling x_expand_toggle";
@@ -405,13 +451,12 @@ begin  -- behavioural
       -- check for sprite/foreground collision
       sprite_fg_map_out <= sprite_fg_map_in;
       if (x_in_sprite='1') and (border_in='0') and (is_foreground_in='1') then
-        if (sprite_sixteen_colour_mode='0') and (sprite_pixel_bits(127 downto 126) /= "00") then
+        if (sprite_sixteen_colour_mode='0') and (sprite_color2_bits /= "00") then
           -- Sprite and foreground collision
           sprite_fg_map_out(sprite_number) <= check_collisions;
         end if;
         if (sprite_sixteen_colour_mode='1')
-          and ((sprite_pixel_bits(127) & sprite_pixel_bits(125) & sprite_pixel_bits(123) & sprite_pixel_bits(121))
-              /= sprite_colour(3 downto 0)) then
+          and (unsigned(sprite_color16_bits) /= sprite_colour(3 downto 0)) then
           -- Sprite and foreground collision
           sprite_fg_map_out(sprite_number) <= check_collisions;
         end if;
@@ -419,13 +464,12 @@ begin  -- behavioural
       -- check for sprite/sprite collision
       sprite_map_out <= sprite_map_in;
       if (x_in_sprite='1') and (border_in='0') then
-        if (sprite_sixteen_colour_mode='0') and (sprite_pixel_bits(127 downto 126) /= "00") then
+        if (sprite_sixteen_colour_mode='0') and (sprite_color2_bits /= "00") then
           -- Sprite and foreground collision
           sprite_map_out(sprite_number) <= check_collisions;
         end if;
         if (sprite_sixteen_colour_mode='1')
-          and ((sprite_pixel_bits(127) & sprite_pixel_bits(125) & sprite_pixel_bits(123) & sprite_pixel_bits(121))
-              /= sprite_colour(3 downto 0)) then
+          and (unsigned(sprite_color16_bits) /= sprite_colour(3 downto 0)) then
           -- Sprite and foreground collision
           sprite_map_out(sprite_number) <= check_collisions;
         end if;
@@ -448,6 +492,7 @@ begin  -- behavioural
         -- sprites can be combined to get more colours, like on the Amiga,
         -- but also with the background, e.g., to modify colour of background
         -- when a "shadow" or "highlight" or sprite of other purpose is drawn
+        sprite_number_out <= sprite_number_in;
         is_sprite_out <= is_sprite_in;
         if sprite_is_multicolour = '0' then
           for bit in 0 to 7 loop
@@ -456,8 +501,8 @@ begin  -- behavioural
               pixel_out(bit) <= pixel_in(bit);
             end if;
           end loop;
-          pixel_out(sprite_number) <= sprite_pixel_bits(127) xor pixel_in(sprite_number);
-          sprite_colour_out(sprite_number) <= sprite_pixel_bits(127) xor sprite_colour_in(sprite_number);
+          pixel_out(sprite_number) <= sprite_color2_bits(1) xor pixel_in(sprite_number);
+          sprite_colour_out(sprite_number) <= sprite_color2_bits(1) xor sprite_colour_in(sprite_number);
         else
           for bit in 0 to 7 loop
             if (bit /= sprite_number_mod_4)
@@ -466,23 +511,21 @@ begin  -- behavioural
               pixel_out(bit) <= pixel_in(bit);
             end if;
           end loop;
-          pixel_out(sprite_number_mod_4 + 1) <= sprite_pixel_bits(127) xor pixel_in(sprite_number_mod_4 + 1);
-          pixel_out(sprite_number_mod_4) <= sprite_pixel_bits(126) xor pixel_in(sprite_number_mod_4);
-          sprite_colour_out(sprite_number_mod_4 + 1) <= sprite_pixel_bits(127) xor sprite_colour_in(sprite_number_mod_4 + 1);
-          sprite_colour_out(sprite_number_mod_4) <= sprite_pixel_bits(126) xor sprite_colour_in(sprite_number_mod_4);
+          pixel_out(sprite_number_mod_4 + 1) <= sprite_color2_bits(1) xor pixel_in(sprite_number_mod_4 + 1);
+          pixel_out(sprite_number_mod_4) <= sprite_color2_bits(0) xor pixel_in(sprite_number_mod_4);
+          sprite_colour_out(sprite_number_mod_4 + 1) <= sprite_color2_bits(1) xor sprite_colour_in(sprite_number_mod_4 + 1);
+          sprite_colour_out(sprite_number_mod_4) <= sprite_color2_bits(0) xor sprite_colour_in(sprite_number_mod_4);
         end if;
       else
         -- Non-bitplane sprites
         pixel_out <= pixel_in;
         if ((is_foreground_in='0') or (sprite_priority='0')) and (x_in_sprite='1') then
           if sprite_sixteen_colour_mode='1' then
-            pixel_16(3) := sprite_pixel_bits(127);
-            pixel_16(2) := sprite_pixel_bits(125);
-            pixel_16(1) := sprite_pixel_bits(123);
-            pixel_16(0) := sprite_pixel_bits(121);
+            pixel_16 := sprite_color16_bits;
             report "SPRITE: Painting 16-colour pixel using bits "
               & to_string(pixel_16);
             if unsigned(pixel_16) /= sprite_colour(3 downto 0) then
+              sprite_number_out <= sprite_number;
               is_sprite_out <= not border_in;
               sprite_colour_out(3 downto 0) <= unsigned(pixel_16);
               -- Setting bitplane mode and 16-colour mode allows setting the
@@ -491,30 +534,36 @@ begin  -- behavioural
               sprite_colour_out(7) <= sprite_bitplane_enable;
             else
               -- Transparent pixel, don't draw.
+              sprite_number_out <= sprite_number_in;
               is_sprite_out <= is_sprite_in;
               null;
             end if;
           else
-            report "SPRITE: Painting pixel using bits " & to_string(sprite_pixel_bits(127 downto 126));        
-            case sprite_pixel_bits(127 downto 126) is
+            report "SPRITE: Painting pixel using bits " & to_string(sprite_color2_bits);        
+            case sprite_color2_bits is
               when "01" =>
                 is_sprite_out <= not border_in;
+                sprite_number_out <= sprite_number;
                 sprite_colour_out <= sprite_multi0_colour;
               when "10" =>
                 is_sprite_out <= not border_in;
+                sprite_number_out <= sprite_number;
                 sprite_colour_out <= sprite_colour;
               when "11" =>
                 is_sprite_out <= not border_in;
+                sprite_number_out <= sprite_number;
                 sprite_colour_out <= sprite_multi1_colour;
               when others =>
                 -- background shows through
                 is_sprite_out <= is_sprite_in;
+                sprite_number_out <= sprite_number_in;
                 sprite_colour_out <= sprite_colour_in;
             end case;
           end if;
         else
           is_sprite_out <= is_sprite_in;
           sprite_colour_out <= sprite_colour_in;
+          sprite_number_out <= sprite_number_in;
         end if;
       end if;
 --      report "SPRITE: leaving VIC-II sprite #" & integer'image(sprite_number);

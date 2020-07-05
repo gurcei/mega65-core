@@ -21,6 +21,7 @@ library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use ieee.numeric_std.all;
 use Std.TextIO.all;
+use work.cputypes.all;
 
 -- Uncomment the following library declaration if using
 -- arithmetic functions with Signed or Unsigned values
@@ -28,8 +29,8 @@ use Std.TextIO.all;
 
 -- Uncomment the following library declaration if instantiating
 -- any Xilinx primitives in this code.
---library UNISIM;
---use UNISIM.VComponents.all;
+library UNISIM;
+use UNISIM.VComponents.all;
 
 entity container is
   Port ( CLK_IN : STD_LOGIC;         
@@ -41,8 +42,8 @@ entity container is
          -- CIA1 ports for keyboard/joystick 
          ----------------------------------------------------------------------
          restore_key : in std_logic;
-         column : inout  std_logic_vector(8 downto 0);
-         row : inout  std_logic_vector(8 downto 0);
+         column : inout  std_logic_vector(8 downto 0) := (others => 'Z');
+         row : in  std_logic_vector(8 downto 0);
          keyleft : inout std_logic := 'Z';
          keyup : inout std_logic := 'Z';
          fa_left : in std_logic;
@@ -121,6 +122,11 @@ entity container is
          hdmi_de : out std_logic; -- high when valid pixels being output
          -- (i.e., when hsync, vsync both low?)
          
+         ---------------------------------------------------------------------------
+         -- IO lines to QSPI config flash (used so that we can update bitstreams)
+         ---------------------------------------------------------------------------
+         QspiDB : inout unsigned(3 downto 0) := (others => '0');
+         QspiCSn : out std_logic;
          
          ---------------------------------------------------------------------------
          -- IO lines to the ethernet controller
@@ -143,6 +149,9 @@ entity container is
          sdClock : out std_logic;       -- (sclk_o)
          sdMOSI : out std_logic;      
          sdMISO : in  std_logic;
+
+         sd2MOSI : out std_logic;
+         sd2MISO : in std_logic;
 
          -- Left and right audio
          pwm_l : out std_logic;
@@ -184,17 +193,15 @@ architecture Behavioral of container is
   signal cpu_game : std_logic := '1';
   signal cpu_exrom : std_logic := '1';
 
-  signal halfpixelclock : std_logic := '1';  
   signal pixelclock : std_logic;
+  signal ethclock : std_logic;
   signal cpuclock : std_logic;
-  signal clock30 : std_logic;
-  signal clock33 : std_logic;
-  signal clock40 : std_logic;
-  signal clock200 : std_logic;
+  signal clock27 : std_logic;
+  signal clock100 : std_logic;
+  signal clock162 : std_logic;
+  
   
   signal segled_counter : unsigned(31 downto 0) := (others => '0');
-
-  signal clock100mhz : std_logic := '0';
 
   signal slow_access_request_toggle : std_logic;
   signal slow_access_ready_toggle : std_logic;
@@ -216,10 +223,6 @@ architecture Behavioral of container is
   -- XXX We should read the real temperature and feed this to the DDR controller
   -- so that it can update timing whenever the temperature changes too much.
   signal fpga_temperature : std_logic_vector(11 downto 0) := (others => '0');
-
-  -- XXX Connect to real QSPI flash interface at some point
-  signal QspiDB : std_logic_vector(3 downto 0) := (others => '0');
-  signal QspiCSn : std_logic := '1';
 
   signal fa_left_drive : std_logic;
   signal fa_right_drive : std_logic;
@@ -256,19 +259,58 @@ architecture Behavioral of container is
   signal flopled_drive : std_logic;
   signal flopmotor_drive : std_logic;
 
+  signal joy3 : std_logic_vector(4 downto 0);
+  signal joy4 : std_logic_vector(4 downto 0);
 
   signal cart_access_count : unsigned(7 downto 0);
+
+  signal qspi_clock : std_logic;
   
 begin
 
+--STARTUPE2:STARTUPBlock--7Series
+
+--XilinxHDLLibrariesGuide,version2012.4
+  STARTUPE2_inst: STARTUPE2
+    generic map(PROG_USR=>"FALSE", --Activate program event security feature.
+                                   --Requires encrypted bitstreams.
+  SIM_CCLK_FREQ=>10.0 --Set the Configuration Clock Frequency(ns) for simulation.
+    )
+    port map(
+--      CFGCLK=>CFGCLK,--1-bit output: Configuration main clock output
+--      CFGMCLK=>CFGMCLK,--1-bit output: Configuration internal oscillator
+                              --clock output
+--             EOS=>EOS,--1-bit output: Active high output signal indicating the
+                      --End Of Startup.
+--             PREQ=>PREQ,--1-bit output: PROGRAM request to fabric output
+             CLK=>'0',--1-bit input: User start-up clock input
+             GSR=>'0',--1-bit input: Global Set/Reset input (GSR cannot be used
+                      --for the port name)
+             GTS=>'0',--1-bit input: Global 3-state input (GTS cannot be used
+                      --for the port name)
+             KEYCLEARB=>'0',--1-bit input: Clear AES Decrypter Key input
+                                  --from Battery-Backed RAM (BBRAM)
+             PACK=>'0',--1-bit input: PROGRAM acknowledge input
+
+             -- Put CPU clock out on the QSPI CLOCK pin
+             USRCCLKO=>qspi_clock,--1-bit input: User CCLK input
+             USRCCLKTS=>'0',--1-bit input: User CCLK 3-state enable input
+
+             -- Assert DONE pin
+             USRDONEO=>'1',--1-bit input: User DONE pin output control
+             USRDONETS=>'1' --1-bit input: User DONE 3-state enable output
+             );
+-- End of STARTUPE2_inst instantiation
+
+  
   dotclock1: entity work.dotclock100
     port map ( clk_in1 => CLK_IN,
-               clock100 => pixelclock, -- 100MHz
-               clock30 => clock30,
-               clock33 => clock33,
-               clock40 => clock40,
-               clock50 => cpuclock, -- 50MHz
-               clock200 => clock200
+               clock100 => clock100,
+               clock81 => pixelclock, -- 80MHz
+               clock41 => cpuclock, -- 40MHz
+               clock50 => ethclock,
+               clock162 => clock162,
+               clock27 => clock27
                );
 
   fpgatemp0: entity work.fpgatemp
@@ -287,10 +329,13 @@ begin
       cpu_game => cpu_game,
       sector_buffer_mapped => sector_buffer_mapped,
       
-      qspidb => qspidb,
-      qspicsn => qspicsn,      
---      qspisck => '1',
+      qspidb => qspiDB,
+      qspicsn => qspiCSn,      
+      qspisck => qspi_clock,
 
+      joya => joy3,
+      joyb => joy4,
+      
       cart_busy => led,
       cart_access_count => cart_access_count,
       
@@ -300,6 +345,9 @@ begin
       slow_access_address => slow_access_address,
       slow_access_wdata => slow_access_wdata,
       slow_access_rdata => slow_access_rdata,
+
+      expansionram_data_ready_strobe => '1',
+      expansionram_busy => '1',
   
       ----------------------------------------------------------------------
       -- Expansion/cartridge port
@@ -333,20 +381,18 @@ begin
       );
   
   machine0: entity work.machine
-    generic map (
-      cpufrequency => 50)
+    generic map (cpufrequency => 40,
+                 target => mega65r1)
     port map (
       pixelclock      => pixelclock,
       cpuclock        => cpuclock,
-      clock30 => clock30,
-      clock33 => clock33,
-      clock40 => clock40,
-      clock50mhz      => cpuclock,
---      ioclock         => ioclock, -- 32MHz
---      uartclock         => ioclock, -- must be 32MHz
-      uartclock         => cpuclock, -- Match CPU clock (48MHz)
+      uartclock       => cpuclock, -- Match CPU clock
       ioclock         => cpuclock, -- Match CPU clock
-      clock200 => clock200,
+      clock162 => clock162,
+      clock100 => clock100,
+      clock27 => clock27,
+      clock50mhz      => ethclock,
+
       btncpureset => btncpureset,
       reset_out => reset_out,
       irq => irq,
@@ -354,10 +400,13 @@ begin
       restore_key => restore_key,
       sector_buffer_mapped => sector_buffer_mapped,
 
-      no_kickstart => '0',
+      joy3 => joy3,
+      joy4 => joy4,
+      
+      no_hyppo => '0',
       
       vsync           => v_vsync,
-      hsync           => v_hsync,
+      vga_hsync           => v_hsync,
       vgared          => v_red,
       vgagreen        => v_green,
       vgablue         => v_blue,
@@ -439,6 +488,8 @@ begin
       sclk_o => sdClock,
       mosi_o => sdMOSI,
       miso_i => sdMISO,
+      mosi2_o => sd2MOSI,
+      miso2_i => sd2MISO,
 
       slow_access_request_toggle => slow_access_request_toggle,
       slow_access_ready_toggle => slow_access_ready_toggle,
@@ -482,11 +533,13 @@ begin
       -- Ignore widget board interface and other things
       tmpint => '1',
       tmpct => '1',
-      
-      pmod_clock => '1',
-      pmod_start_of_sequence => '0',
-      pmod_data_in => (others => '1'),
-      pmoda => pmoda_dummy,
+
+     widget_matrix_col => (others => '1'),
+      widget_restore => '1',
+      widget_capslock => '1',
+      widget_joya => (others => '1'),
+      widget_joyb => (others => '1'),      
+
       sw => (others => '0'),
 --      uart_rx => '1',
       btn => (others => '1')
@@ -500,7 +553,9 @@ begin
 
     -- VGA output at full pixel clock
     vdac_clk <= pixelclock;
-    eth_clock <= cpuclock;
+
+    -- Ethernet clock at 50MHz
+    eth_clock <= ethclock;
 
     -- Drive most ports, to relax timing
     if rising_edge(cpuclock) then

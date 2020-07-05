@@ -1,9 +1,18 @@
-; 3.5" floppy drive test program for MEGA65
+; HDMI I2C setup / test program
 
 ; Include C64 BASIC program load header
 
 	 .word $0801
 	 .org $0801
+
+	; $D60E bit 7 = DDR SDA
+	; $D60E bit 6 = DDR SCL
+	; $D60D bit 7 = SDA
+	; $D60D bit 6 = SCL
+	 .alias data_bit  64
+	 .alias clock_bit 128
+
+	 .alias addr_7511 $7A
 
 	 .scope
 	 .word _next, 10                       ; Next line and current line number
@@ -17,6 +26,9 @@ iter1:	 .byte 0
 
 programentrypoint:
 
+	lda #0
+	sta $d020
+	
 	; disable interrupts so we can single-step more easily
 	sei
 	
@@ -35,75 +47,495 @@ programentrypoint:
 	jsr $ffd2
 	lda #$0e
 	jsr $ffd2
-	lda #$41
-	jsr $ffd2
-	lda #$61
-	jsr $ffd2
+
+	jmp @main_loop
+
+@setup7511:
+
 
 	jsr i2cstop
 
-	; Try reading an HDMI I2C register
+	; Enable replacing SPD memory
+;	lda #addr_7511
+;	ldy #$1f
+;	ldx #$80
+;	jsr writeregister
+;
+;	; Enable replacing and reading SPD memory
+;	lda #addr_7511
+;	ldy #$44
+;	ldx #$78
+;	jsr writeregister
+;
+;
+;	; Set HDMI Source Product Description string to "M.E.G.A. 65 Computer"
+;	ldy #$00
+;@spd_next_char:
+;	lda spd_string,y
+;	tax
+;	phy
+;	lda #$70 ; I2C address for packet memory
+;	jsr writeregister
+;	ply
+;	iny
+;	cpy #$20
+;	bne @spd_next_char
+;
+	; Initialise various registers according to the documentation.
+	ldx #$00
+@setup_next_reg:
+	lda hdmi_register_setup_table,x
+	cmp #$FF
+	beq  @done_setup_regs
+	tay
+	inx
+	lda hdmi_register_setup_table,x
+	inx
+	phx
+	tax
+	lda #addr_7511
+	jsr writeregister
+	plx
+	jmp @setup_next_reg
 
-	lda #$00  ; I2C address
+@done_setup_regs:
 
-nextaddr:
-	pha
+	; Now make the packet mem etc visible to HDMI side, so we can get
+	; HDMI target name showing on HDMI receiver
+	; Resume SPD packet update
+;	lda #addr_7511
+;	ldy #$1f
+;	ldx #$00
+;	jsr writeregister
+;
+;	; Disable replacing and reading SPD memory from I2C, so HDMI can read it
+;	lda #addr_7511
+;	ldy #$44
+;	ldx #$79
+;	jsr writeregister
 
-	ldy #$00
-	jsr readregister
-	pha
+;	; Request reading of EDID data
+;	lda #addr_7511
+;	ldy #$C9
+;	ldx #$03
+;	jsr writeregister
+;	lda #addr_7511
+;	ldy #$C9
+;	ldx #$13
+;	jsr writeregister
+;
+	; Indicate NTSC 480p 60Hz 4:3 ( = $02)
+	; For PAL 576p 50Hz 4:3 = $11
+	lda #addr_7511
+	ldy #$3c
+	ldx #$02
+	jsr writeregister
+	
+	lda #addr_7511
+	ldy #$3d
+	ldx #$02          
+	jsr writeregister
+
+
+@main_loop:
+
+	; Re-initialise if SPACE pressed
+	jsr $ffe4
+	cmp #$20
+	beq @setup7511
+	cmp #$4d
+	bne @notmute
+
+	; enable colour space conversion
+	lda #addr_7511
+	ldy #$18
+	ldx #$80
+	jsr writeregister
+	jmp @main_loop
+
+@notmute:
+	cmp #$4e
+	bne @notunmute
+
+	; disable colour space conversion
+	lda #addr_7511
+	ldy #$18
+	ldx #$00
+	jsr writeregister
+	jmp @main_loop
+
+@notunmute:
+
+	lda #$13
+	jsr $ffd2
+
+	; Force power up
+	lda #addr_7511
+	ldy #$9d
+	ldx #$61
+	jsr writeregister
+
+	; Dump values of all registers
+
+	jsr dump_main_regs
 	lda #$0d
 	jsr $ffd2
-	plx
+	jsr dump_packet_mem
+	lda #$0d
+	jsr $ffd2
+	jsr dump_edid
+
+endloop:
+	inc $0427
+
+;	jsr $ffe4
+;	cmp #$20
+;	bne endloop
+
+	jmp @main_loop
+
+
+dump_main_regs:
 	lda #$00
-	tay
-	jsr $bdcd
+	sta regnum
+
+@nextaddr:
+
+	; Read out registers of device $70 = packet memory map
+	; $7A = normal registers (change by setting normal register $45)
+	; $7E = EDID ( change by setting normal register $43)
+	lda #addr_7511
+	ldy regnum
+	jsr readregister
+	pha
+	lda regnum
+	and #$03
+	bne @noprintspace
+	lda #$20
+	jsr $ffd2
+@noprintspace:
+
+	; erase previous value on screen
+	lda #$20
+	jsr $ffd2
+	lda #$20
+	jsr $ffd2
+	lda #$9d
+	jsr $ffd2
+	lda #$9d
+	jsr $ffd2
+
+	plx
+;	lda #$00
+;	tay
+;	jsr $bdcd
+	jsr hexout
+
+	lda regnum
+	and #$0f
+	cmp #$0f
+	bne @noprintnewline
+	lda #$0d
+	jsr $ffd2
+@noprintnewline:
 
 	lda txackresult
 	cmp #$70
-	beq foundaddr
+	beq @readok
 
-	pla
-	inc 
-	bne nextaddr
+	; indicate error reading I2C bus?
 
-	jmp endloop
+@readok:
+	inc regnum
+	lda regnum
+	bne @nextaddr
 
-foundaddr:
-	pla
-	sta $0400
-l:	inc $d020
-	jmp l
+	rts
+
+dump_packet_mem:
+	lda #$00
+	sta regnum
+
+@nextaddr2:
+
+	; Read out registers of device $70 = packet memory map
+	; $7A = normal registers (change by setting normal register $45)
+	; $7E = EDID ( change by setting normal register $43)
+	lda #$70
+	ldy regnum
+	jsr readregister
+	pha
+	lda regnum
+	and #$03
+	bne @noprintspace2
+	lda #$20
+	jsr $ffd2
+@noprintspace2:
+
+	; erase previous value on screen
+	lda #$20
+	jsr $ffd2
+	lda #$20
+	jsr $ffd2
+	lda #$9d
+	jsr $ffd2
+	lda #$9d
+	jsr $ffd2
+
+	plx
+;	lda #$00
+;	tay
+;	jsr $bdcd
+	jsr hexout
+
+	lda regnum
+	and #$0f
+	cmp #$0f
+	bne @noprintnewline2
+	lda #$0d
+	jsr $ffd2
+@noprintnewline2:
+
+	lda txackresult
+	cmp #$70
+	beq @readok2
+
+	; indicate error reading I2C bus?
+
+@readok2:
+	inc regnum
+	lda regnum
+	cmp #$40
+	bne @nextaddr2
+
+	rts
+
+
+dump_edid:
+	lda #$00
+	sta regnum
+
+@nextaddr3:
+
+	; Read out registers of device $70 = packet memory map
+	; $7A = normal registers (change by setting normal register $45)
+	; $7E = EDID ( change by setting normal register $43)
+	lda #$7E
+	ldy regnum
+	jsr readregister
+	pha
+	lda regnum
+	and #$03
+	bne @noprintspace3
+	lda #$20
+	jsr $ffd2
+@noprintspace3:
+
+	; erase previous value on screen
+	lda #$20
+	jsr $ffd2
+	lda #$20
+	jsr $ffd2
+	lda #$9d
+	jsr $ffd2
+	lda #$9d
+	jsr $ffd2
+
+	plx
+;	lda #$00
+;	tay
+;	jsr $bdcd
+	jsr hexout
+
+	lda regnum
+	and #$0f
+	cmp #$0f
+	bne @noprintnewline3
+	lda #$0d
+	jsr $ffd2
+@noprintnewline3:
+
+	lda txackresult
+	cmp #$70
+	beq @readok3
+
+	; indicate error reading I2C bus?
+
+@readok3:
+	inc regnum
+	lda regnum
+	cmp #$20
+	bne @nextaddr3
+
+	rts
+
+
+hexout:
+	; X = char to display
+	txa
+	lsr
+	lsr
+	lsr
+	lsr
+	jsr hexdigitout
+	txa
+	and #$0f
+	jsr hexdigitout
+	rts
+hexdigitout:
+	cmp #$a
+	bcs @atof
+	ora #$30
+	jmp $ffd2
+@atof:
+	sec
+	sbc #9
+	ora #$40
+	jmp $ffd2
+
+regnum: .byte 0
+
+spd_string:
+	; See: https://ez.analog.com/video/f/q-a/9162/adv7511-source-product-description-infoframe-spd
+	.byte $83 ; Type 3
+	.byte $01 ; No idea why this value here
+	.byte 25  ; Length of frame???
+	.byte "@M.E.G.A.",0
+	.byte 0
+	.byte "MEGA65 Computer",0
+	.byte 0,0,0,0,0,0,0,0,0,0,0 ; Make sure we have at least 32 bytes, the 32nd of which must be $00
+
+hdmi_register_setup_table:
+	; Table of registers and values to setup
+	; Taken from Section 3 - Quick Setup Guide for the 7511 HDMI transceiver
+	; https://www.analog.com/media/en/technical-documentation/user-guides/ADV7511_Programming_Guide.pdf	
+        ; See also: http://dtsheet.com/doc/2013050/hdmi-enabled-designs-using-the-adv7511-pdf
+
+	; Power up the TX
+	.byte $41,$10 ; power up (section 4.8)
+
+	; Fixed register that must be set on power up
+	.byte $98,$03 ; (section 4.2.9)
+	.byte $9A,$E0 ; (section 4.2.9)
+	.byte $9c,$30 ; (section 4.2.9)
+	.byte $9d,$61 ; (section 4.2.9) (but what about bits 2 - 7 ?)
+	.byte $A2,$A4 ; (section 4.2.9)
+	.byte $A3,$A4 ; (section 4.2.9)
+	.byte $E0,$D0 ; (section 4.2.9)
+	.byte $F9,$00 ; (section 4.2.9)
+
+	; More registers, inferred from Mike Field's work with the 7511
+	.byte $55,$02 ; Enable Active Frame Information ($1x) with PC signaling ($x2). TV signalling would be $x1
+
+	.byte $56,$19 ; Centred 4:3 format
+	
+	; Setup the video input mode
+	; Register maps are around page 157 of the 7511 programming guide
+	.byte $15,$01 ; (section 4.3.2) Video input mode in bits 0 - 3 : mode 0 = Non-DDR RGB, 8 - 12 bits per colour channel, separate syncs
+	      	      ; Bits 4 - 7 = audio sample rate: 0b0000 = 44.1KHz audio. 0b1110 = 192KHz, 0b1010 = 96KHz, 0b010 = 48KHz, 0b0011 = 32KHz
+		
+	.byte $16,$34 ; (sections 4.3.2 and 4.3.5) Video input and output information
+	      	      ; bits 5 - 4 = input colour depth: 11 = 8 bits per channel
+		      ; bits 3 - 2 = input video style: 01 = Style 2
+		      ; bits 7 - 6 = output style: 0b00 = 4:4:4
+		      ; bit 1 = ddr input edge (not used as we are not using DDR)
+		      ; bit 0 = RGB/YCbCr select: 0 = RGB
+
+	; 4:3 aspect ratio, positive sync polarities
+	.byte $17,$00   ; Aspect ratio etc
+	      		; bit 7 must be clear
+			; bit 6 = VSYNC polarity
+			; bit 5 = HSYNC polarity
+			; bits 4 - 3 must be clear
+			; bit 2 = 4:2:2 to 4:4:4 interpolation. 0 = use zero order interpolation ,1 = use first order interpolation
+			; bit 1 = aspect ratio. 0 = 4:3, 1 = 16:9
+			; bit 0 = enable DE generator (see registers $35 - $3A). Probably should be 0?
+
+	.byte $18,$00	; Disable colour space conversion
+	.byte $AF,$02  	; bit 1 : Manual HDMI/DVI select (1 = HDMI, required for audio?)
+	      		; bit 7 = Enable HDCP (1 = enable. so set to 0 for no DRM)
+	.byte $40,$c0  ; bit 7 = Enable GC (General Control?)
+	      	       ; bit 6 = Source Product Description, allows sending a name of the video source for display on the
+		       ; receiver.  If we set this up correctly, we can have it display "M.E.G.A. 65 Computer" or similar
+	      	       ; other bits enable various other packets. Leave others disabled.
+	.byte $4C,$04  ; Output colour depth and general control colour depth (set to 24 bit)
+	.byte $97,$40  ; Set BKSV interrupt flag (but bit 6 must be set, before writing 1 to bit 6  according to page 15 ???)
+
+	.byte $4b,$40  ; clear any AV mute
+
+	; should these need to be set, or is it okay to leave them as default?
+	.byte $C5,$00 ; unknown register should have value $00
+	.byte $D1,$FF
+	
+	.byte $D2,$80
+	.byte $D3,$80
+	.byte $D4,$80
+
+	; Colour space conversion registers, from Mike Field's code
+	.byte $18,$e7,$19,$34,$1a,$04,$1b,$ad,$1c,$00,$1d,$00,$1e,$1c,$1f,$1b
+	.byte $20,$1d,$21,$dc,$22,$04,$23,$ad,$24,$1f,$25,$24,$26,$01,$27,$35
+	.byte $28,$00,$29,$00,$2a,$04,$2b,$ad,$2c,$08,$2d,$7c,$2e,$1b,$2f,$77
+
+	.byte $D0,$3C
 	
 
 
-	
-endloop:
-	jmp endloop
+	; End of list
+	.byte $FF,$FF
 
+; Write a register on the I2C bus
+	; A = I2C address of device
+	; Y = register number to write
+	; X = value to write
 
-	; $D607 bit 6 = DDR SDA
-	; $D607 bit 7 = DDR SCL
-	; $D60D bit 6 = SDA
-	; $D60D bit 7 = SCL
+writeregister:
+	phx
+	pha
+	jsr i2cstart
+
+	; Send I2C address with read bit clear 
+	pla
+	and #$fe  ; clear read bit
+	sta $0428
+	jsr i2ctxbyte
+
+	; Send register number
+	tya
+	sta $0450
+	jsr i2ctxbyte
+
+	; Send register value to write
+	pla
+	sta $0478
+	jsr i2ctxbyte
+	; End of register write
+	jsr i2cstop
+	rts	
 
 ; Read a register on the I2C bus
 	; A = I2C address of device
 	; Y = register number to read
 
 readregister:
-	phy
 	pha
+	jsr i2cstart
+	; Send I2C address with read bit clear 
+	pla
+	pha
+	and #$fe  ; clear read bit
+	jsr i2ctxbyte
+	; Send register number
+	tya
+	jsr i2ctxbyte
+
+	; Send repeated start
+	jsr i2cidlebus
 	jsr i2cstart
 	; Send I2C address with read bit set
 	pla
-	ora #$01
-	jsr i2ctxbyte
-	; Send register number
-	pla
+	ora #$01      ; set read bit
 	jsr i2ctxbyte
 	; Read result
-	jsr i2cstart
 	jsr i2crxbyte
 	pha
 	jsr i2cstop
@@ -127,6 +559,7 @@ rxbit:
 	asl
 	pha
 	
+	jsr delay10usec
 	jsr sclhigh
 
 clockstretchwait:
@@ -138,6 +571,7 @@ clockstretchwait:
 	jsr delay10usec
 
 	jsr sdaread
+
 	cmp #$00
 	beq rx0
 	pla
@@ -166,7 +600,19 @@ rxackclk:
 	pla
 	rts
 
+; Wait for I2C bus to go idle
+	
+i2cidlebus:
 
+	; get bus back to idle position after TXing byte
+	jsr sdahigh
+waitforsdatofloat:
+	jsr sdaread
+	cmp #$00
+	beq waitforsdatofloat
+	jsr sclhigh
+
+	rts
 
 ; Send a byte on the I2C bus
 
@@ -209,9 +655,9 @@ txbitsent:
 	ora #$70
 	sta txackresult
 
-	jsr $ffd2
-	lda #$0d
-	jsr $ffd2
+;	jsr $ffd2
+;	lda #$0d
+;	jsr $ffd2
 	pla
 
 	rts
@@ -219,24 +665,23 @@ txbitsent:
 txackresult:	.byte 0
 
 delay10usec:
-	; 50MHz = 20ns cycles.
-	; 10usec = 500 CPU cycles
+	; 40MHz = 25ns cycles.
+	; 10usec = 400 CPU cycles
+	; (Turns out we don't need anything like that long for the I2C
+	; comms to work, so we have tuned the routine here.)
 	; This loop should be more than sufficient
-	phx
-	ldx #$00
-d1:	inx
-	bne d1
-	plx
+;	phx
+;	ldx #$ff
+;d1:	inx
+;	bne d1
+;	plx
 	
-	lda #$2d
-	jsr $ffd2
-
 	rts
 
 i2cstart:
 
-	lda #$28
-	jsr $ffd2
+;	lda #$28
+;	jsr $ffd2
 
 	jsr sdalow
 	jsr delay10usec
@@ -250,75 +695,73 @@ i2cstop:
 	jsr sdahigh
 	jsr delay10usec
 
-	lda #$29
-	jsr $ffd2
+;	lda #$29
+;	jsr $ffd2
 
 	rts
 
 sclhigh:
-	lda #$80
-	trb $d607
+	lda #clock_bit
+	trb $d60E
 	tsb $d60d
 
-	lda #$63
-	jsr $ffd2
+;	lda #$63
+;	jsr $ffd2
 
 	rts
 scllow:
-	lda #$80
-	tsb $d607
+	lda #clock_bit
+	tsb $d60e
 	trb $d60d
 
-	lda #$43
-	jsr $ffd2
+;	lda #$43
+;	jsr $ffd2
 
 	rts
 
 sclread:
-	lda #$80
-	trb $d607
-	tsb $d607
+	lda #clock_bit
+	trb $d60e
+	tsb $d60d
 	lda $d60d
-	and #$80
-	rol
-	rol
-	and #$01
+	and #clock_bit
+	beq sclread0
+	lda #$01
+sclread0:
 	rts
 
 
 sdahigh:
-	lda #$40
-	trb $d607
+	lda #data_bit
+	trb $d60e
 	tsb $d60d
 
-	lda #$64
-	jsr $ffd2
+;	lda #$64
+;	jsr $ffd2
 	rts
 sdalow:
-	lda #$40
-	tsb $d607
+	lda #data_bit
+	tsb $d60e
 	trb $d60d
 
-	lda #$44
-	jsr $ffd2
 	rts
 
 sdaread:
-	lda #$40
-	trb $d607
-	tsb $d607
+	lda #data_bit
+	trb $d60e
+	tsb $d60d
 	lda $d60d
-	and #$40
-	lsr
-	lsr
-	lsr
-	lsr
-	lsr
-	lsr
-
+	and #data_bit
+	beq sdaread0
+	lda #$01
+sdaread0:
+;	pha
+;	ora #$30
+;	jsr $ffd2
+;	pla 
 	rts
 	
 
 	.scend
 
-	.outfile "utilities/floptest.prg"
+	.outfile "hdmitest.prg"
