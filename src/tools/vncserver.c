@@ -380,8 +380,8 @@ int openSerialPort(char *port)
   if (serialfd==-1) { perror("open"); return -1; }
   fcntl(serialfd,F_SETFL,fcntl(serialfd, F_GETFL, NULL)|O_NONBLOCK);
   struct termios t;
-  if (cfsetospeed(&t, B230400)) perror("Failed to set output baud rate");
-  if (cfsetispeed(&t, B230400)) perror("Failed to set input baud rate");
+  if (cfsetospeed(&t, B2000000)) perror("Failed to set output baud rate");
+  if (cfsetispeed(&t, B2000000)) perror("Failed to set input baud rate");
   t.c_cflag &= ~PARENB;
   t.c_cflag &= ~CSTOPB;
   t.c_cflag &= ~CSIZE;
